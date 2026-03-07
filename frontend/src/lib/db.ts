@@ -15,7 +15,10 @@ export async function getEmployees(): Promise<Employee[]> {
     .from("employees")
     .select("*")
     .order("name")
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.warn("[db] getEmployees:", error.message)
+    return []
+  }
   return data ?? []
 }
 
@@ -57,7 +60,10 @@ export async function getProjects(): Promise<Project[]> {
     .from("projects")
     .select("*")
     .order("created_at", { ascending: false })
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.warn("[db] getProjects:", error.message)
+    return []
+  }
   return data ?? []
 }
 
@@ -106,7 +112,10 @@ export async function getProjectAssignments(
     .from("project_assignments")
     .select("*, employee:employees(*)")
     .eq("project_id", projectId)
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.warn("[db] getProjectAssignments:", error.message)
+    return []
+  }
   return data ?? []
 }
 
@@ -143,7 +152,10 @@ export async function getProjectTasks(projectId: string): Promise<Task[]> {
     .select("*, employee:employees(name)")
     .eq("project_id", projectId)
     .order("created_at", { ascending: true })
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.warn("[db] getProjectTasks:", error.message)
+    return []
+  }
   return data ?? []
 }
 
@@ -183,7 +195,10 @@ export async function getProjectMeetings(
     .select("*")
     .eq("project_id", projectId)
     .order("start_time")
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.warn("[db] getProjectMeetings:", error.message)
+    return []
+  }
   return data ?? []
 }
 
@@ -192,7 +207,10 @@ export async function getAllMeetings(): Promise<Meeting[]> {
     .from("meetings")
     .select("*")
     .order("start_time")
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.warn("[db] getAllMeetings:", error.message)
+    return []
+  }
   return data ?? []
 }
 
@@ -216,7 +234,10 @@ export async function getNotifications(userId: string): Promise<Notification[]> 
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.warn("[db] getNotifications:", error.message)
+    return []
+  }
   return data ?? []
 }
 

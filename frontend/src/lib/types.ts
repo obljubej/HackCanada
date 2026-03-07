@@ -11,8 +11,10 @@ export interface Employee {
   skills: string[]
   availability: boolean
   manager_id?: string | null
+  user_role?: string   // 'manager' | 'employee' | 'ceo' | 'cto'
   created_at?: string
 }
+
 
 export interface Department {
   id: string

@@ -3,6 +3,15 @@
 -- Run this in your Supabase project's SQL editor.
 -- ============================================================
 
+-- ── Profiles (links auth.users to app roles) ──────────────────
+create table if not exists profiles (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  email       text,
+  full_name   text,
+  user_role   text not null default 'employee', -- 'manager' | 'employee'
+  created_at  timestamptz default now()
+);
+
 -- ── Employees ────────────────────────────────────────────────
 create table if not exists employees (
   id          uuid primary key default gen_random_uuid(),
@@ -13,6 +22,7 @@ create table if not exists employees (
   skills      text[] default '{}',
   availability boolean default true,
   manager_id  uuid references employees(id),
+  user_role   text not null default 'employee', -- 'manager' | 'employee' | 'ceo' | 'cto'
   created_at  timestamptz default now()
 );
 
@@ -67,7 +77,11 @@ create table if not exists notifications (
   created_at  timestamptz default now()
 );
 
--- ── RLS: Turn off for local dev, enable in production ─────────
--- alter table employees enable row level security;
--- alter table projects enable row level security;
--- etc.
+-- ── Disable RLS for local dev (enable in production) ──────────
+alter table if exists profiles disable row level security;
+alter table if exists employees disable row level security;
+alter table if exists projects disable row level security;
+alter table if exists project_assignments disable row level security;
+alter table if exists tasks disable row level security;
+alter table if exists meetings disable row level security;
+alter table if exists notifications disable row level security;
