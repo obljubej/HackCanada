@@ -1,0 +1,108 @@
+{
+  "meetings": [
+    {
+      "id": "ac460bbc-ad67-477c-8b73-f2fee981ac83",
+      "title": "Automated Verification MVerification Meetingeeting",
+      "project_id": null,
+      "scheduled_at": "2026-03-07T22:35:40.446Z",
+      "host_id": null,
+      "status": "ended",
+      "created_at": "2026-03-07T22:35:40.446Z",
+      "started_at": "2026-03-07T22:37:03.524Z",
+      "ended_at": "2026-03-07T23:10:19.973Z"
+    },
+    {
+      "id": "ddffe0c8-f254-444a-9b19-ce32ccf173cf",
+      "title": "Hack Canada overview",
+      "project_id": null,
+      "scheduled_at": "2026-03-07T23:12:10.874Z",
+      "host_id": null,
+      "status": "ended",
+      "created_at": "2026-03-07T23:12:10.874Z",
+      "started_at": "2026-03-07T23:12:21.847Z",
+      "ended_at": "2026-03-07T23:12:22.965Z"
+    },
+    {
+      "id": "7cd3c201-90b7-4eb4-aace-604403bf991a",
+      "title": "Test meeting",
+      "project_id": null,
+      "scheduled_at": "2026-03-07T23:13:13.478Z",
+      "host_id": null,
+      "status": "ended",
+      "created_at": "2026-03-07T23:13:13.478Z",
+      "started_at": "2026-03-07T23:26:12.383Z",
+      "ended_at": "2026-03-07T23:26:13.270Z"
+    },
+    {
+      "id": "d2341b74-8500-4065-b40a-b48dab00148f",
+      "title": "AI Project",
+      "project_id": null,
+      "scheduled_at": "2026-03-07T23:27:19.512Z",
+      "host_id": null,
+      "status": "ended",
+      "created_at": "2026-03-07T23:27:19.512Z",
+      "started_at": "2026-03-07T23:27:27.508Z",
+      "ended_at": "2026-03-07T23:35:47.382Z"
+    }
+  ],
+  "meeting_participants": [],
+  "meeting_transcripts": [],
+  "meeting_summaries": [
+    {
+      "id": "7f21860b-2bc6-4602-acbb-120bc685729e",
+      "meeting_id": "ac460bbc-ad67-477c-8b73-f2fee981ac83",
+      "summary_text": "Meeting successfully recorded locally.",
+      "action_items": [
+        {
+          "task": "Review Notes",
+          "priority": "low"
+        }
+      ],
+      "key_decisions": [
+        "Migrated to JSON local fallback"
+      ]
+    },
+    {
+      "id": "4cb964c6-cb29-458a-9d3a-fb8d9f5ff8ab",
+      "meeting_id": "ddffe0c8-f254-444a-9b19-ce32ccf173cf",
+      "summary_text": "Meeting successfully recorded locally.",
+      "action_items": [
+        {
+          "task": "Review Notes",
+          "priority": "low"
+        }
+      ],
+      "key_decisions": [
+        "Migrated to JSON local fallback"
+      ]
+    },
+    {
+      "id": "b1a13b34-3655-4486-a656-d7e73d13bc56",
+      "meeting_id": "7cd3c201-90b7-4eb4-aace-604403bf991a",
+      "summary_text": "Meeting successfully recorded locally.",
+      "action_items": [
+        {
+          "task": "Review Notes",
+          "priority": "low"
+        }
+      ],
+      "key_decisions": [
+        "Migrated to JSON local fallback"
+      ]
+    },
+    {
+      "id": "ec6fc90d-c545-4e76-995a-65277f9b86a3",
+      "meeting_id": "d2341b74-8500-4065-b40a-b48dab00148f",
+      "summary_text": "Meeting successfully recorded locally.",
+      "action_items": [
+        {
+          "task": "Review Notes",
+          "priority": "low"
+        }
+      ],
+      "key_decisions": [
+        "Migrated to JSON local fallback"
+      ]
+    }
+  ]
+}

@@ -8,6 +8,9 @@ import { ingestDriveLink, ingestDriveFolder, isDriveFolderUrl, getKnownUsers } f
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
 import { meetingsRouter } from "./meetings.js";
+import { voiceRouter } from "./voice.js";
+import { aiRouter } from "./ai-endpoints.js";
+import organizationRouter from "./organization.js";
 
 const app = express();
 app.use(express.json());
@@ -56,40 +59,35 @@ app.get("/oauth/callback", async (req, res) => {
   }
 });
 
-app.get("/oauth/status", (_req, res) => {
+// ── API Routes ─────────────────────────────────────────────────────────
+
+const apiRouter = express.Router();
+
+apiRouter.use("/meetings", meetingsRouter);
+apiRouter.use("/voice", voiceRouter);
+apiRouter.use("/ai", aiRouter);
+apiRouter.use("/organization", organizationRouter);
+
+apiRouter.get("/oauth/status", (_req, res) => {
   res.json({ connected: !!storedTokens });
 });
 
-// ── Ingest route ─────────────────────────────────────────────────────
-
-app.post("/ingest", async (req, res) => {
+apiRouter.post("/ingest", async (req, res) => {
   if (!storedTokens) {
-    res
-      .status(401)
-      .json({ error: "Not connected to Google. Visit /oauth/login first." });
+    res.status(401).json({ error: "Not connected to Google. Visit /oauth/login first." });
     return;
   }
-
   const { driveUrl, userId = "default-user" } = req.body;
   if (!driveUrl) {
     res.status(400).json({ error: "driveUrl is required" });
     return;
   }
-
   try {
     if (isDriveFolderUrl(driveUrl)) {
-      const result = await ingestDriveFolder({
-        userId,
-        folderUrl: driveUrl,
-        accessToken: storedTokens.access_token,
-      });
+      const result = await ingestDriveFolder({ userId, folderUrl: driveUrl, accessToken: storedTokens.access_token });
       res.json({ success: true, ...result });
     } else {
-      const result = await ingestDriveLink({
-        userId,
-        driveUrl,
-        accessToken: storedTokens.access_token,
-      });
+      const result = await ingestDriveLink({ userId, driveUrl, accessToken: storedTokens.access_token });
       res.json({ success: true, ...result });
     }
   } catch (err: any) {
@@ -98,15 +96,9 @@ app.post("/ingest", async (req, res) => {
   }
 });
 
-// ── Search route ─────────────────────────────────────────────────────
-
-app.post("/search", async (req, res) => {
+apiRouter.post("/search", async (req, res) => {
   const { query, userId = "default-user" } = req.body;
-  if (!query) {
-    res.status(400).json({ error: "query is required" });
-    return;
-  }
-
+  if (!query) { res.status(400).json({ error: "query is required" }); return; }
   try {
     const results = await searchMemories(userId, query);
     res.json({ results });
@@ -116,15 +108,9 @@ app.post("/search", async (req, res) => {
   }
 });
 
-// ── Ask route (Backboard integration) ────────────────────────────────
-
-app.post("/ask", async (req, res) => {
+apiRouter.post("/ask", async (req, res) => {
   const { question, userId = "default-user", threadId } = req.body;
-  if (!question) {
-    res.status(400).json({ error: "question is required" });
-    return;
-  }
-
+  if (!question) { res.status(400).json({ error: "question is required" }); return; }
   try {
     const result = await askQuestion(userId, question, threadId);
     res.json(result);
@@ -134,15 +120,13 @@ app.post("/ask", async (req, res) => {
   }
 });
 
-app.post("/ask/reset", (req, res) => {
+apiRouter.post("/ask/reset", (req, res) => {
   const { userId = "default-user" } = req.body;
   resetThread(userId);
   res.json({ success: true });
 });
 
-// ── Users route ──────────────────────────────────────────────────────
-
-app.get("/users", async (_req, res) => {
+apiRouter.get("/users", async (_req, res) => {
   try {
     const users = await getKnownUsers();
     res.json({ users });
@@ -152,9 +136,7 @@ app.get("/users", async (_req, res) => {
   }
 });
 
-// ── Meetings ─────────────────────────────────────────────────────────
-
-app.use("/meetings", meetingsRouter);
+app.use("/api", apiRouter);
 
 // ── Health / status ──────────────────────────────────────────────────
 
@@ -164,18 +146,19 @@ app.get("/", (_req, res) => {
     status: "ok",
     routes: {
       "GET /oauth/login": "Start Google OAuth flow",
-      "GET /oauth/status": "Check if Google is connected",
-      "POST /ingest": "Ingest a Google Drive doc or folder { driveUrl }",
-      "POST /search": "Search memories { query }",
-      "POST /ask": "Ask a question { question, userId?, threadId? }",
-      "POST /ask/reset": "Reset conversation thread { userId? }",
+      "GET /api/oauth/status": "Check if Google is connected",
+      "POST /api/ingest": "Ingest a Google Drive doc or folder { driveUrl }",
+      "POST /api/search": "Search memories { query }",
+      "POST /api/ask": "Ask a question { question, userId?, threadId? }",
+      "POST /api/ask/reset": "Reset conversation thread { userId? }",
+      "GET /api/meetings": "Meeting endpoints",
     },
   });
 });
 
 // ── Start ────────────────────────────────────────────────────────────
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`\n  RelAI Backend running on http://localhost:${PORT}`);
   console.log(`  OAuth:  http://localhost:${PORT}/oauth/login`);

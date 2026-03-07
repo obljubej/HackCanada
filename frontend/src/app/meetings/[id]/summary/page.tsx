@@ -8,7 +8,9 @@ import { meetingsAPI } from "@/lib/api"
 interface ActionItem {
   task: string
   assignee: string
-  due_date: string
+  due_date?: string
+  priority?: "high" | "medium" | "low"
+  due?: string
 }
 
 interface MeetingSummary {
@@ -82,31 +84,12 @@ export default function MeetingSummaryPage() {
         { id: "3", name: "Priya Sharma", role: "UI/UX Designer" },
       ].slice(0, 3 - meeting.participants.length).concat(meeting.participants)
 
-  // Mock Insights extracted from summary
-  const insights = [
-    "Team showed strong alignment on technical architecture",
-    "Authentication complexity may require additional sprint time",
-    "Consider adding automated testing to Sprint 1 scope"
-  ]
+  // Mapped Insights extracted from summary decisions
+  const insights = meeting.summary?.key_decisions?.slice(0, 3) || []
 
-  const summaryText = meeting.summary?.summary_text || "The team met to discuss the project architecture. Key technical decisions were made regarding data management. The authentication system will implement OAuth 2.0 with JWT tokens for secure user sessions. Sprint 1 is scheduled to begin on Monday, with weekly sync meetings established for ongoing coordination. The team demonstrated strong technical alignment and readiness to proceed."
-  const decisions = meeting.summary?.key_decisions?.length 
-    ? meeting.summary.key_decisions 
-    : [
-        "Frontend will use React + GraphQL for data fetching",
-        "Sprint 1 will start Monday, March 10th",
-        "Authentication will use OAuth 2.0 with JWT tokens",
-        "Weekly sync meetings every Monday at 10 AM"
-      ]
-      
-  const actionItems = meeting.summary?.action_items?.length
-    ? meeting.summary.action_items
-    : [
-        { task: "Build authentication UI components", assignee: "Sarah Chen", priority: "high", due: "Mar 12" },
-        { task: "Create GraphQL API schema and resolvers", assignee: "Daniel Rodriguez", priority: "high", due: "Mar 11" },
-        { task: "Set up CI/CD pipeline for frontend", assignee: "Marcus Thompson", priority: "medium", due: "Mar 13" },
-        { task: "Design user onboarding flow wireframes", assignee: "Priya Sharma", priority: "medium", due: "Mar 10" },
-      ]
+  const summaryText = meeting.summary?.summary_text || "No summary is available yet. The AI may still be processing the meeting transcript."
+  const decisions = meeting.summary?.key_decisions || []
+  const actionItems = meeting.summary?.action_items || []
 
   return (
     <div className="min-h-screen bg-[#131520] text-slate-200 p-4 lg:p-8 font-sans selection:bg-indigo-500/30">
@@ -210,6 +193,7 @@ export default function MeetingSummaryPage() {
               
               <h4 className="text-[15px] font-bold text-white mb-4">Key Decisions</h4>
               <ul className="space-y-3">
+                {decisions.length === 0 && <p className="text-sm text-slate-500 italic">No key decisions recorded.</p>}
                 {decisions.map((d, i) => (
                   <li key={i} className="flex items-start gap-3">
                      <div className="h-5 w-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/30">
@@ -226,6 +210,8 @@ export default function MeetingSummaryPage() {
             {/* Action Items List */}
             <div className="space-y-3">
               <h3 className="text-lg font-bold text-white px-2">Action Items</h3>
+              
+              {actionItems.length === 0 && <p className="text-sm text-slate-500 italic px-2">No action items were assigned during this meeting.</p>}
               
               {/* @ts-ignore */}
               {actionItems.map((item, i) => {
@@ -296,6 +282,7 @@ export default function MeetingSummaryPage() {
             </div>
             
             <div className="space-y-4">
+              {insights.length === 0 && <p className="text-sm text-slate-500 italic">Analysis unavailable.</p>}
               {insights.map((insight, i) => (
                 <div key={i} className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-100 rounded-2xl p-5 text-sm font-medium leading-relaxed hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-colors shadow-inner">
                   {insight}

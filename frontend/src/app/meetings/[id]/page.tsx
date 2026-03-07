@@ -34,49 +34,27 @@ function formatMeetingTime(dateStr?: string): string {
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
 }
 
-// ── ElevenLabs TTS ─────────────────────────────────────────
-
-const ELEVENLABS_API_KEY = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || ""
-const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
+// ── TTS via Backend ─────────────────────────────────────────
 
 let currentAudioSource: AudioBufferSourceNode | null = null
 
-async function speakElevenLabs(text: string, onEnd?: () => void) {
+async function speakBackendTTS(text: string, onEnd?: () => void) {
   currentAudioSource?.stop()
   currentAudioSource = null
 
-  if (!ELEVENLABS_API_KEY) {
-    speakBrowser(text, onEnd)
-    return
-  }
-
   try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": ELEVENLABS_API_KEY,
-          "Content-Type": "application/json",
-          Accept: "audio/mpeg",
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_turbo_v2",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.2,
-            use_speaker_boost: true,
-          },
-        }),
-      }
-    )
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
+    const response = await fetch(`${apiUrl}/voice/text-to-speech`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voiceId: "21m00Tcm4TlvDq8ikWAM" }),
+    })
 
-    if (!response.ok) throw new Error(`ElevenLabs error: ${response.status}`)
+    if (!response.ok) throw new Error(`Backend TTS error: ${response.status}`)
 
     const arrayBuffer = await response.arrayBuffer()
-    const audioCtx = new AudioContext()
+    // @ts-ignore
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
     const source = audioCtx.createBufferSource()
     source.buffer = audioBuffer
@@ -88,7 +66,7 @@ async function speakElevenLabs(text: string, onEnd?: () => void) {
     source.start(0)
     currentAudioSource = source
   } catch (err) {
-    console.warn("[TTS] ElevenLabs failed, falling back to browser TTS:", err)
+    console.warn("[TTS] Backend TTS failed, falling back to browser TTS:", err)
     speakBrowser(text, onEnd)
   }
 }
@@ -103,7 +81,7 @@ function speakBrowser(text: string, onEnd?: () => void) {
 }
 
 function speak(text: string, onEnd?: () => void) {
-  speakElevenLabs(text, onEnd)
+  speakBackendTTS(text, onEnd)
 }
 
 // ── Main Component ───────────────────────────────────────────
@@ -129,9 +107,15 @@ export default function MeetingRoomPage() {
   const [aiLoading, setAiLoading] = useState(false)
 
   const transcriptEndRef = useRef<HTMLDivElement>(null)
+  const speakingRef = useRef(false)
+  
+  // Voice threshold logic
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const activeTranscriptRef = useRef("")
 
   // Load meeting data
   useEffect(() => {
+    // @ts-ignore
     setVoiceSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition))
     meetingsAPI.get(meetingId).then((data) => {
       setMeeting(data)
@@ -176,11 +160,19 @@ export default function MeetingRoomPage() {
       }
       setTranscript(prev => [...prev, aiEntry])
 
-      if (voiceResponse && isVoiceActive && !isMuted) {
+      if (voiceResponse && !isMuted) {
         setStatus("speaking")
+        speakingRef.current = true
+        recognitionRef.current?.stop() // Prevent feedback loop
+
         speak(result.answer, () => {
-          setStatus("listening")
-          startListening()
+          speakingRef.current = false
+          if (isVoiceActive && !isMuted) {
+            setStatus("listening")
+            startListening()
+          } else {
+            setStatus("idle")
+          }
         })
       } else {
         setStatus(isVoiceActive && !isMuted ? "listening" : "idle")
@@ -200,18 +192,35 @@ export default function MeetingRoomPage() {
   // ── Voice Recognition ────────────────────────────────────
 
   const startListening = useCallback(() => {
-    if (!voiceSupported || isMuted) return
+    if (!voiceSupported || isMuted || speakingRef.current) return
+    // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SpeechRecognition()
-    rec.continuous = false
-    rec.interimResults = false
+    rec.continuous = true
+    rec.interimResults = true
     rec.lang = "en-US"
 
     rec.onresult = (event: any) => {
-      const text = event.results[0][0].transcript
-      if (text.trim()) {
-        askAI(text, true)
+      let currentInterim = ""
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        currentInterim += event.results[i][0].transcript
       }
+      
+      const text = currentInterim.trim()
+      if (!text) return
+
+      activeTranscriptRef.current = text
+
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+      
+      // Wait 2.5 seconds after speaking stops before asking AI
+      silenceTimerRef.current = setTimeout(() => {
+        if (activeTranscriptRef.current) {
+          const finalQ = activeTranscriptRef.current
+          activeTranscriptRef.current = ""
+          askAI(finalQ, true)
+        }
+      }, 2500)
     }
     rec.onerror = () => {
       setStatus("idle")
@@ -243,7 +252,6 @@ export default function MeetingRoomPage() {
   }
 
   const handleEndMeeting = async () => {
-    if (!confirm("End this meeting? The AI will generate a summary.")) return
     stopListening()
     await meetingsAPI.end(meetingId)
     router.push(`/meetings/${meetingId}/summary`)
@@ -262,7 +270,7 @@ export default function MeetingRoomPage() {
     e.preventDefault()
     const q = textInput.trim()
     setTextInput("")
-    await askAI(q, false)
+    await askAI(q, true) // Force TTS for text-to-text as requested
   }
 
   // ── UI Rendering ─────────────────────────────────────────
@@ -275,14 +283,8 @@ export default function MeetingRoomPage() {
     )
   }
 
-  // Ensure we have exactly 3 mock participants for the layout if real data is missing, matching the Figma design
-  const displayParticipants = meeting.participants.length >= 3 
-    ? meeting.participants.slice(0, 3) 
-    : [
-        { id: "1", name: "Sarah Chen", role: "Senior Frontend Developer", availability: true },
-        { id: "2", name: "Daniel Rodriguez", role: "Full Stack Developer", availability: true },
-        { id: "3", name: "Priya Sharma", role: "UI/UX Designer", availability: true },
-      ].slice(0, 3 - meeting.participants.length).concat(meeting.participants)
+  // Determine User for the bottom center
+  const userParticipant = meeting.participants[0] || { name: "You", role: "Organizer" }
 
   return (
     <div className="flex flex-col h-screen bg-[#1e2235] text-slate-200 font-sans overflow-hidden">
@@ -314,46 +316,52 @@ export default function MeetingRoomPage() {
       <div className="flex flex-1 overflow-hidden">
         
         {/* ── Left: Video Grid (2/3 width) ───────────────────── */}
-        <div className="w-2/3 p-6 flex flex-col">
-          <div className="grid grid-cols-2 grid-rows-2 gap-4 flex-1 h-full">
+        <div className="w-2/3 p-6 flex flex-col justify-center max-w-4xl mx-auto">
+          <div className="grid grid-rows-2 grid-cols-1 gap-6 flex-1 h-full py-8">
             
-            {/* Box 1: AI Assistant (Purple Gradient) */}
-            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl relative overflow-hidden flex flex-col items-center justify-center group shadow-xl">
+            {/* Box 1: AI Assistant (Top Center) */}
+            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2rem] relative overflow-hidden flex flex-col items-center justify-center group shadow-xl">
               <div className="absolute inset-0 bg-black/10 mix-blend-overlay pointer-events-none" />
               
-              <div className={`h-24 w-24 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center mb-4 transition-transform border border-white/20 shadow-2xl ${
+              <div className={`h-28 w-28 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center mb-6 transition-transform border border-white/20 shadow-2xl ${
                 status === "listening" ? "scale-105" :
                 status === "speaking" ? "animate-pulse scale-105" : ""
               }`}>
-                <svg className="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <svg className="h-14 w-14 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
                 </svg>
               </div>
               
-              <h3 className="text-xl font-bold text-white z-10 tracking-tight">RelAI Assistant</h3>
+              <h3 className="text-2xl font-bold text-white z-10 tracking-tight">RelAI Assistant</h3>
               
-              <div className="mt-2 bg-indigo-900/40 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 text-xs font-bold text-white uppercase tracking-widest z-10 flex items-center gap-2">
-                {status === "listening" && <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" />}
-                {status === "speaking" && <span className="h-1.5 w-1.5 bg-blue-400 rounded-full animate-pulse" />}
-                {status === "thinking" && <span className="h-1.5 w-1.5 bg-amber-400 rounded-full animate-pulse" />}
-                {status === "idle" && <span className="h-1.5 w-1.5 bg-slate-400 rounded-full" />}
+              <div className="mt-4 bg-indigo-900/40 backdrop-blur-md px-5 py-2 rounded-full border border-white/10 text-xs font-bold text-white uppercase tracking-widest z-10 flex items-center gap-2">
+                {status === "listening" && <span className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse" />}
+                {status === "speaking" && <span className="h-2 w-2 bg-blue-400 rounded-full animate-pulse" />}
+                {status === "thinking" && <span className="h-2 w-2 bg-amber-400 rounded-full animate-pulse" />}
+                {status === "idle" && <span className="h-2 w-2 bg-slate-400 rounded-full" />}
                 {status === "idle" ? "Ready" : status}
               </div>
             </div>
 
-            {/* Boxes 2-4: Participants */}
-            {displayParticipants.map((p, i) => (
-              <div key={p.id} className="bg-[#2a304a] rounded-3xl relative overflow-hidden flex flex-col items-center justify-center shadow-lg border border-white/5">
-                <div className="h-24 w-24 rounded-full bg-[#1da0f2] flex items-center justify-center text-4xl font-light text-white shadow-xl">
-                  {p.name[0]}
-                </div>
-                
-                <div className="absolute bottom-4 left-4 right-4 bg-[#1e2235] p-3 rounded-2xl border border-white/5 opacity-90 shadow-2xl">
-                  <p className="text-sm font-bold text-white truncate">{p.name}</p>
-                  <p className="text-xs text-slate-400 truncate mt-0.5">{p.role}</p>
-                </div>
+            {/* Box 2: User (Bottom Center) */}
+            <div className="bg-[#2a304a] rounded-[2rem] relative overflow-hidden flex flex-col items-center justify-center shadow-lg border border-white/5">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+              <div className="h-28 w-28 rounded-full bg-[#1da0f2] flex items-center justify-center text-5xl font-light text-white shadow-xl z-10">
+                {userParticipant.name.charAt(0)}
               </div>
-            ))}
+              
+              <div className="absolute bottom-6 left-6 right-6 bg-[#1e2235]/90 backdrop-blur-md p-4 rounded-2xl border border-white/10 shadow-2xl flex items-center justify-between z-10">
+                <div>
+                  <p className="text-base font-bold text-white truncate">{userParticipant.name}</p>
+                  <p className="text-xs text-slate-400 truncate mt-0.5">{userParticipant.role}</p>
+                </div>
+                {status === "listening" && (
+                  <div className="h-10 w-10 flex items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                     <svg className="h-5 w-5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                  </div>
+                )}
+              </div>
+            </div>
 
           </div>
         </div>

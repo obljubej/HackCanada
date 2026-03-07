@@ -205,6 +205,18 @@ export default function ChatPage() {
           </a>
           
           <div className="h-6 w-px bg-border hidden sm:block" />
+
+          {/* Navigation Links */}
+          <div className="hidden md:flex items-center space-x-6 mr-4">
+            <a href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+              Dashboard
+            </a>
+            <a href="/meetings" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+              Meetings
+            </a>
+          </div>
+          
+          <div className="h-6 w-px bg-border hidden sm:block" />
           
           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
             <label className="text-xs font-medium text-muted-foreground hidden sm:block">Memory Group</label>

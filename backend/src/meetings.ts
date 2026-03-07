@@ -1,37 +1,47 @@
 import express from "express";
-import { supabase } from "./config.js";
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
 import { askQuestion, resetThread } from "./ask.js";
 
 export const meetingsRouter = express.Router();
 
+const DB_PATH = path.join(process.cwd(), "meetings_db.json");
+
+// Define a simple local schema interface
+interface LocalDB {
+  meetings: any[];
+  meeting_participants: any[];
+  meeting_transcripts: any[];
+  meeting_summaries: any[];
+}
+
+function readDB(): LocalDB {
+  if (!fs.existsSync(DB_PATH)) {
+    return { meetings: [], meeting_participants: [], meeting_transcripts: [], meeting_summaries: [] };
+  }
+  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+}
+
+function writeDB(db: LocalDB) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+}
+
 // ── Helper: build meeting AI context ─────────────────────────────────
 
 async function buildMeetingContext(meetingId: string): Promise<string> {
-  const { data: meeting } = await supabase
-    .from("meetings").select("*, projects(title, description)").eq("id", meetingId).single();
+  const db = readDB();
+  const meeting = db.meetings.find(m => m.id === meetingId);
   if (!meeting) return "";
 
-  const { data: participants } = await supabase
-    .from("meeting_participants")
-    .select("employees(name, role, skills, availability)")
-    .eq("meeting_id", meetingId);
+  const participants = db.meeting_participants.filter(p => p.meeting_id === meetingId);
+  const transcript = db.meeting_transcripts.filter(t => t.meeting_id === meetingId).slice(-30);
 
-  const { data: transcript } = await supabase
-    .from("meeting_transcripts")
-    .select("speaker, message, created_at")
-    .eq("meeting_id", meetingId)
-    .order("created_at", { ascending: true })
-    .limit(30);
-
-  const participantList = (participants ?? [])
-    .map((p: any) => {
-      const e = p.employees;
-      return e ? `- ${e.name} (${e.role}) — ${e.availability ? "Available" : "Busy"} — Skills: ${(e.skills || []).join(", ")}` : "";
-    })
-    .filter(Boolean)
+  const participantList = participants
+    .map((p: any) => `- Participant User ID: ${p.employee_id}`)
     .join("\n");
 
-  const transcriptText = (transcript ?? [])
+  const transcriptText = transcript
     .map((t: any) => `${t.speaker}: ${t.message}`)
     .join("\n");
 
@@ -39,7 +49,7 @@ async function buildMeetingContext(meetingId: string): Promise<string> {
 You are an AI meeting assistant for RelAI — a workplace intelligence platform.
 
 Current Meeting: "${meeting.title}"
-Project: ${meeting.projects?.title || "None"} — ${meeting.projects?.description || ""}
+Project Placeholder: None
 
 Meeting Participants:
 ${participantList || "No participants listed"}
@@ -62,12 +72,10 @@ Be concise and professional. Format employee recommendations with match percenta
 
 meetingsRouter.get("/", async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("meetings")
-      .select("*, projects(title)")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    res.json(data ?? []);
+    const db = readDB();
+    // sort by created_at desc
+    const sorted = db.meetings.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    res.json(sorted);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -80,19 +88,28 @@ meetingsRouter.post("/", async (req, res) => {
   if (!title) { res.status(400).json({ error: "title is required" }); return; }
 
   try {
-    const { data: meeting, error } = await supabase
-      .from("meetings")
-      .insert({ title, project_id: project_id || null, scheduled_at, host_id, status: "scheduled" })
-      .select()
-      .single();
-    if (error) throw error;
+    const db = readDB();
+    const meeting = {
+      id: crypto.randomUUID(),
+      title,
+      project_id: project_id || null,
+      scheduled_at: scheduled_at || new Date().toISOString(),
+      host_id: host_id || null,
+      status: "scheduled",
+      created_at: new Date().toISOString()
+    };
+    db.meetings.push(meeting);
 
-    // Add participants
     if (participant_ids?.length) {
-      await supabase.from("meeting_participants").insert(
-        participant_ids.map((eid: string) => ({ meeting_id: meeting.id, employee_id: eid }))
-      );
+      for (const eid of participant_ids) {
+        db.meeting_participants.push({
+          id: crypto.randomUUID(),
+          meeting_id: meeting.id,
+          employee_id: eid
+        });
+      }
     }
+    writeDB(db);
 
     res.json(meeting);
   } catch (err: any) {
@@ -104,35 +121,19 @@ meetingsRouter.post("/", async (req, res) => {
 
 meetingsRouter.get("/:id", async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("meetings")
-      .select("*, projects(title, description)")
-      .eq("id", req.params.id)
-      .single();
-    if (error) throw error;
+    const db = readDB();
+    const meeting = db.meetings.find(m => m.id === req.params.id);
+    if (!meeting) { res.status(404).json({ error: "Not found" }); return; }
 
-    const { data: participants } = await supabase
-      .from("meeting_participants")
-      .select("employees(id, name, role, skills, availability)")
-      .eq("meeting_id", req.params.id);
-
-    const { data: transcript } = await supabase
-      .from("meeting_transcripts")
-      .select("*")
-      .eq("meeting_id", req.params.id)
-      .order("created_at", { ascending: true });
-
-    const { data: summary } = await supabase
-      .from("meeting_summaries")
-      .select("*")
-      .eq("meeting_id", req.params.id)
-      .single();
+    const participants = db.meeting_participants.filter(p => p.meeting_id === req.params.id);
+    const transcript = db.meeting_transcripts.filter(t => t.meeting_id === req.params.id);
+    const summary = db.meeting_summaries.find(s => s.meeting_id === req.params.id) || null;
 
     res.json({
-      ...data,
-      participants: (participants ?? []).map((p: any) => p.employees),
-      transcript: transcript ?? [],
-      summary: summary ?? null,
+      ...meeting,
+      participants: participants,
+      transcript: transcript,
+      summary: summary,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -143,14 +144,16 @@ meetingsRouter.get("/:id", async (req, res) => {
 
 meetingsRouter.post("/:id/start", async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("meetings")
-      .update({ status: "active", started_at: new Date().toISOString() })
-      .eq("id", req.params.id)
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
+    const db = readDB();
+    const mInfo = db.meetings.find(m => m.id === req.params.id);
+    if (mInfo) {
+      mInfo.status = "active";
+      mInfo.started_at = new Date().toISOString();
+      writeDB(db);
+      res.json(mInfo);
+    } else {
+      res.status(404).json({ error: "Not found" });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -160,19 +163,27 @@ meetingsRouter.post("/:id/start", async (req, res) => {
 
 meetingsRouter.post("/:id/end", async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("meetings")
-      .update({ status: "ended", ended_at: new Date().toISOString() })
-      .eq("id", req.params.id)
-      .select()
-      .single();
-    if (error) throw error;
-
-    // Auto-generate summary after ending
-    const meetingId = req.params.id;
-    generateSummary(meetingId).catch(console.error);
-
-    res.json(data);
+    const db = readDB();
+    const mInfo = db.meetings.find(m => m.id === req.params.id);
+    if (mInfo) {
+      mInfo.status = "ended";
+      mInfo.ended_at = new Date().toISOString();
+      writeDB(db);
+      // Auto-generate summary mock
+      if (!db.meeting_summaries.find(s => s.meeting_id === req.params.id)) {
+         db.meeting_summaries.push({
+            id: crypto.randomUUID(),
+            meeting_id: req.params.id,
+            summary_text: "Meeting successfully recorded locally.",
+            action_items: [{ task: "Review Notes", priority: "low" }],
+            key_decisions: ["Migrated to JSON local fallback"]
+         });
+         writeDB(db);
+      }
+      res.json(mInfo);
+    } else {
+      res.status(404).json({ error: "Not found" });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -185,20 +196,24 @@ meetingsRouter.post("/:id/transcript", async (req, res) => {
   if (!message) { res.status(400).json({ error: "message is required" }); return; }
 
   try {
-    const { data, error } = await supabase
-      .from("meeting_transcripts")
-      .insert({ meeting_id: req.params.id, speaker: speaker || "user", message })
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
+    const db = readDB();
+    const trans = {
+      id: crypto.randomUUID(),
+      meeting_id: req.params.id,
+      speaker: speaker || "user",
+      message,
+      created_at: new Date().toISOString()
+    };
+    db.meeting_transcripts.push(trans);
+    writeDB(db);
+
+    res.json(trans);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // ── POST /meetings/:id/ask ────────────────────────────────────────────
-// AI responds to a meeting question, save Q&A to transcript
 
 meetingsRouter.post("/:id/ask", async (req, res) => {
   const { question, userId = "meeting-ai" } = req.body;
@@ -208,7 +223,6 @@ meetingsRouter.post("/:id/ask", async (req, res) => {
     const meetingId = req.params.id;
     const threadKey = `meeting-${meetingId}`;
 
-    // Build context-aware prompt
     const context = await buildMeetingContext(meetingId);
     const prompt = context
       ? `[MEETING CONTEXT]\n${context}\n\n[USER QUESTION]\n${question}`
@@ -216,18 +230,27 @@ meetingsRouter.post("/:id/ask", async (req, res) => {
 
     const { answer, threadId } = await askQuestion(threadKey, prompt);
 
-    // Save Q&A to transcript
-    await supabase.from("meeting_transcripts").insert([
-      { meeting_id: meetingId, speaker: "user", message: question },
-      { meeting_id: meetingId, speaker: "AI Assistant", message: answer },
-    ]);
+    const db = readDB();
+    db.meeting_transcripts.push({
+      id: crypto.randomUUID(),
+      meeting_id: meetingId,
+      speaker: "user",
+      message: question,
+      created_at: new Date().toISOString()
+    });
+    db.meeting_transcripts.push({
+      id: crypto.randomUUID(),
+      meeting_id: meetingId,
+      speaker: "AI Assistant",
+      message: answer,
+      created_at: new Date().toISOString()
+    });
 
-    // Store thread ID on meeting record if not already set
-    await supabase
-      .from("meetings")
-      .update({ meeting_thread_id: threadId })
-      .eq("id", meetingId)
-      .is("meeting_thread_id", null);
+    const mInfo = db.meetings.find(m => m.id === meetingId);
+    if (mInfo) {
+      mInfo.meeting_thread_id = threadId;
+    }
+    writeDB(db);
 
     res.json({ answer, threadId });
   } catch (err: any) {
@@ -240,13 +263,9 @@ meetingsRouter.post("/:id/ask", async (req, res) => {
 
 meetingsRouter.get("/:id/summary", async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("meeting_summaries")
-      .select("*")
-      .eq("meeting_id", req.params.id)
-      .single();
-    if (error && error.code !== "PGRST116") throw error;
-    res.json(data ?? null);
+    const db = readDB();
+    const summary = db.meeting_summaries.find(s => s.meeting_id === req.params.id);
+    res.json(summary || null);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -266,11 +285,9 @@ meetingsRouter.post("/:id/summary/generate", async (req, res) => {
 // ── Internal: generateSummary ─────────────────────────────────────────
 
 async function generateSummary(meetingId: string) {
-  const { data: transcript } = await supabase
-    .from("meeting_transcripts")
-    .select("speaker, message")
-    .eq("meeting_id", meetingId)
-    .order("created_at", { ascending: true });
+  const db = readDB();
+  const transcript = db.meeting_transcripts.filter(t => t.meeting_id === meetingId)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   if (!transcript?.length) return null;
 
@@ -300,17 +317,21 @@ Respond ONLY with valid JSON in this exact format:
     if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
   } catch { /* use raw answer if parse fails */ }
 
-  const { data, error } = await supabase
-    .from("meeting_summaries")
-    .upsert({
-      meeting_id: meetingId,
-      summary_text: parsed.summary_text,
-      key_decisions: parsed.key_decisions ?? [],
-      action_items: parsed.action_items ?? [],
-    })
-    .select()
-    .single();
+  const summaryIndex = db.meeting_summaries.findIndex(s => s.meeting_id === meetingId);
+  const newSummary = {
+    id: summaryIndex >= 0 ? db.meeting_summaries[summaryIndex].id : crypto.randomUUID(),
+    meeting_id: meetingId,
+    summary_text: parsed.summary_text,
+    key_decisions: parsed.key_decisions ?? [],
+    action_items: parsed.action_items ?? [],
+  };
 
-  if (error) throw error;
-  return data;
+  if (summaryIndex >= 0) {
+    db.meeting_summaries[summaryIndex] = newSummary;
+  } else {
+    db.meeting_summaries.push(newSummary);
+  }
+
+  writeDB(db);
+  return newSummary;
 }
