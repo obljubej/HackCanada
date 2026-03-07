@@ -147,3 +147,19 @@ export const notificationsAPI = {
     apiPost("/notifications", body),
 };
 
+export const meetingsAPI = {
+  list: () => apiGet("/meetings"),
+  get: (id: string) => apiGet(`/meetings/${id}`),
+  create: (body: { title: string; project_id?: string; scheduled_at?: string; host_id?: string; participant_ids?: string[] }) =>
+    apiPost("/meetings", body),
+  start: (id: string) => apiPost(`/meetings/${id}/start`, {}),
+  end: (id: string) => apiPost(`/meetings/${id}/end`, {}),
+  addTranscript: (id: string, body: { speaker: string; message: string }) =>
+    apiPost(`/meetings/${id}/transcript`, body),
+  ask: (id: string, body: { question: string; userId?: string }) =>
+    apiPost(`/meetings/${id}/ask`, body),
+  getSummary: (id: string) => apiGet(`/meetings/${id}/summary`),
+  generateSummary: (id: string) => apiPost(`/meetings/${id}/summary/generate`, {}),
+};
+
+

@@ -7,6 +7,7 @@ import { createOAuth2Client } from "./config.js";
 import { ingestDriveLink, ingestDriveFolder, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
+import { meetingsRouter } from "./meetings.js";
 
 const app = express();
 app.use(express.json());
@@ -150,6 +151,10 @@ app.get("/users", async (_req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Meetings ─────────────────────────────────────────────────────────
+
+app.use("/meetings", meetingsRouter);
 
 // ── Health / status ──────────────────────────────────────────────────
 

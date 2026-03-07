@@ -61,11 +61,45 @@ create table if not exists tasks (
 -- ── Meetings ─────────────────────────────────────────────────
 create table if not exists meetings (
   id          uuid primary key default gen_random_uuid(),
-  project_id  uuid references projects(id) on delete cascade,
   title       text not null,
-  start_time  timestamptz,
-  attendees   uuid[] default '{}'
+  project_id  uuid references projects(id) on delete set null,
+  host_id     uuid,                        -- user_id of meeting host
+  status      text default 'scheduled',    -- scheduled | active | ended
+  scheduled_at timestamptz,
+  started_at  timestamptz,
+  ended_at    timestamptz,
+  meeting_thread_id text,                  -- Backboard AI thread for this meeting
+  created_at  timestamptz default now()
 );
+
+-- ── Meeting Participants ──────────────────────────────────────
+create table if not exists meeting_participants (
+  id          uuid primary key default gen_random_uuid(),
+  meeting_id  uuid references meetings(id) on delete cascade,
+  employee_id uuid references employees(id) on delete cascade,
+  joined_at   timestamptz,
+  unique(meeting_id, employee_id)
+);
+
+-- ── Meeting Transcripts ───────────────────────────────────────
+create table if not exists meeting_transcripts (
+  id          uuid primary key default gen_random_uuid(),
+  meeting_id  uuid references meetings(id) on delete cascade,
+  speaker     text,                        -- 'user' | 'ai' | employee name
+  message     text not null,
+  created_at  timestamptz default now()
+);
+
+-- ── Meeting Summaries ─────────────────────────────────────────
+create table if not exists meeting_summaries (
+  id           uuid primary key default gen_random_uuid(),
+  meeting_id   uuid references meetings(id) on delete cascade unique,
+  summary_text text,
+  action_items jsonb default '[]',         -- [{task, assignee, due_date}]
+  key_decisions jsonb default '[]',        -- [string]
+  created_at   timestamptz default now()
+);
+
 
 -- ── Notifications ─────────────────────────────────────────────
 create table if not exists notifications (
