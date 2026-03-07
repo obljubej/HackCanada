@@ -25,7 +25,13 @@ dev-backend:
 	npm --prefix backend run dev
 
 dev-frontend:
-	npm --prefix frontend run dev
+	cd frontend && npm run dev
+
+dev-all:
+	cd backend && npm install
+	cd frontend && npm install
+	cd backend && npm run dev & \
+	cd frontend && npm run dev
 
 test-backend:
 	npm --prefix backend exec -- npx tsc --noEmit
