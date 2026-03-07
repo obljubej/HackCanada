@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { supabase, isSessionExpired, clearLoginTime, markLoginTime } from "@/lib/supabase"
-import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, resetChat, getUsers } from "@/lib/api"
+import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, ingestGithubRepo, resetChat, getUsers } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [googleConnected, setGoogleConnected] = useState(false)
   const [showIngest, setShowIngest] = useState(false)
   const [driveUrl, setDriveUrl] = useState("")
+  const [githubUrl, setGithubUrl] = useState("")
   const [ingesting, setIngesting] = useState(false)
   const [ingestResult, setIngestResult] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [memoryUserId, setMemoryUserId] = useState("default-user")
@@ -169,6 +170,23 @@ export default function ChatPage() {
     setIngesting(false)
   }
 
+  const handleGithubIngest = async () => {
+    if (!githubUrl.trim() || !user) return
+    setIngesting(true)
+    setIngestResult(null)
+    try {
+      const data = await ingestGithubRepo(githubUrl.trim(), memoryUserId)
+      setIngestResult({
+        type: "success",
+        text: `GitHub ingest complete: ${data.ingested}/${data.selectedFiles ?? data.totalFiles ?? 0} files (${data.failed ?? 0} failed).`,
+      })
+      setGithubUrl("")
+    } catch (err: any) {
+      setIngestResult({ type: "error", text: err.message || "Failed to ingest GitHub repository" })
+    }
+    setIngesting(false)
+  }
+
   const memoryTypeBadgeColors: Record<string, string> = {
     fact: "bg-blue-500/10 text-blue-400 border-blue-500/20",
     task: "bg-red-500/10 text-red-400 border-red-500/20",
@@ -269,9 +287,10 @@ export default function ChatPage() {
       </header>
 
       {/* Responsive Ingest Panel (Slide Over / Dropdown) */}
-      <div className={`border-b border-border bg-muted/30 transition-all duration-300 ease-in-out overflow-hidden ${showIngest ? "max-h-96 opacity-100 py-4" : "max-h-0 opacity-0"}`}>
+      <div className={`border-b border-border bg-muted/30 transition-all duration-300 ease-in-out overflow-hidden ${showIngest ? "max-h-[36rem] opacity-100 py-4" : "max-h-0 opacity-0"}`}>
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
              <div className="flex-1 w-full space-y-1">
                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Drive URL</label>
                <Input
@@ -289,6 +308,27 @@ export default function ChatPage() {
                   {ingesting ? "Extracting..." : "Ingest Document"}
                 </Button>
              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+              <div className="flex-1 w-full space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">GitHub Repo URL</label>
+                <Input
+                  type="text"
+                  value={githubUrl}
+                  onChange={(e) => setGithubUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo or .../tree/branch/path"
+                  className="w-full bg-background"
+                  onKeyDown={(e) => e.key === "Enter" && handleGithubIngest()}
+                  disabled={ingesting}
+                />
+              </div>
+              <div className="pt-0 sm:pt-5 w-full sm:w-auto flex flex-col gap-2">
+                <Button onClick={handleGithubIngest} disabled={ingesting || !githubUrl.trim()} isLoading={ingesting} className="w-full sm:w-auto" variant="outline">
+                  {ingesting ? "Extracting..." : "Ingest GitHub Repo"}
+                </Button>
+              </div>
+            </div>
           </div>
           {ingestResult && (
              <div className="mt-3">

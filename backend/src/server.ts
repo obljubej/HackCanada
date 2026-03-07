@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import { createOAuth2Client } from "./config.js";
-import { ingestDriveLink, ingestDriveFolder, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
+import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
 import { meetingsRouter } from "./meetings.js";
@@ -98,6 +98,27 @@ app.post("/ingest", async (req, res) => {
   }
 });
 
+app.post("/ingest/github", async (req, res) => {
+  const { repoUrl, userId = "default-user", branch, maxFiles } = req.body;
+  if (!repoUrl) {
+    res.status(400).json({ error: "repoUrl is required" });
+    return;
+  }
+
+  try {
+    const result = await ingestGithubRepo({
+      userId,
+      repoUrl,
+      branch,
+      maxFiles,
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error("[ingest/github] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Search route ─────────────────────────────────────────────────────
 
 app.post("/search", async (req, res) => {
@@ -166,6 +187,7 @@ app.get("/", (_req, res) => {
       "GET /oauth/login": "Start Google OAuth flow",
       "GET /oauth/status": "Check if Google is connected",
       "POST /ingest": "Ingest a Google Drive doc or folder { driveUrl }",
+      "POST /ingest/github": "Ingest a GitHub repo { repoUrl, userId?, branch?, maxFiles? }",
       "POST /search": "Search memories { query }",
       "POST /ask": "Ask a question { question, userId?, threadId? }",
       "POST /ask/reset": "Reset conversation thread { userId? }",

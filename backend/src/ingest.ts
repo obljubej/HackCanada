@@ -291,41 +291,34 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   return res.embeddings!.map((e: any) => e.values);
 }
 
-// ── Main pipeline ────────────────────────────────────────────────────
-
-export async function ingestDriveLink(params: {
+async function ingestTextSource(params: {
   userId: string;
-  driveUrl: string;
-  accessToken: string;
+  source: string;
+  sourceFileId: string;
+  sourceUrl: string;
+  title: string;
+  mimeType: string;
+  text: string;
+  metadata: any;
 }) {
-  const fileId = extractDriveFileId(params.driveUrl);
-  if (!fileId)
-    throw new Error("Could not extract file ID from Google Drive URL.");
-
-  // Fetch known users for memory routing
   const knownUsers = await getKnownUsers();
   console.log(`[ingest] Routing to known users: ${knownUsers.join(", ")}`);
 
-  console.log(`[ingest] Fetching Drive file ${fileId}...`);
-  const doc = await fetchDriveText(fileId, params.accessToken);
-  console.log(`[ingest] Got "${doc.title}" (${doc.text.length} chars)`);
+  const checksum = crypto.createHash("sha256").update(params.text).digest("hex");
 
-  const checksum = crypto.createHash("sha256").update(doc.text).digest("hex");
-
-  // Upsert source document
   const { data: sourceRow, error: sourceErr } = await supabase
     .from("source_documents")
     .upsert(
       {
         user_id: params.userId,
-        source: "gdrive",
-        source_file_id: fileId,
-        source_url: doc.sourceUrl || params.driveUrl,
-        title: doc.title,
-        mime_type: doc.mimeType,
-        raw_text: doc.text,
+        source: params.source,
+        source_file_id: params.sourceFileId,
+        source_url: params.sourceUrl,
+        title: params.title,
+        mime_type: params.mimeType,
+        raw_text: params.text,
         checksum,
-        metadata: doc.metadata,
+        metadata: params.metadata,
       },
       { onConflict: "user_id,source_file_id" }
     )
@@ -335,27 +328,21 @@ export async function ingestDriveLink(params: {
   if (sourceErr) throw sourceErr;
   console.log(`[ingest] Source document stored: ${sourceRow.id}`);
 
-  // Extract memories with Gemini
   console.log("[ingest] Extracting memories with Gemini...");
   const extracted = await extractMemories(
-    doc.title,
-    doc.mimeType,
-    doc.sourceUrl,
-    doc.text,
+    params.title,
+    params.mimeType,
+    params.sourceUrl,
+    params.text,
     knownUsers
   );
-  console.log(
-    `[ingest] Extracted ${extracted.memories.length} memories`
-  );
+  console.log(`[ingest] Extracted ${extracted.memories.length} memories`);
 
-  // Embed memory content
   console.log("[ingest] Generating memory embeddings...");
   const memoryEmbeddings = await embedTexts(
     extracted.memories.map((m: any) => m.content)
   );
 
-  // Route each memory to the relevant users identified by Gemini.
-  // If a memory has no relevant_users or lists unknown users, fall back to params.userId.
   const memoryRows: any[] = [];
   for (let i = 0; i < extracted.memories.length; i++) {
     const m = extracted.memories[i];
@@ -382,56 +369,179 @@ export async function ingestDriveLink(params: {
     }
   }
 
-  // Delete old memories for this document (re-ingest scenario)
-  await supabase
-    .from("memory_items")
-    .delete()
-    .eq("document_id", sourceRow.id);
-
-  const { error: memErr } = await supabase
-    .from("memory_items")
-    .insert(memoryRows);
+  await supabase.from("memory_items").delete().eq("document_id", sourceRow.id);
+  const { error: memErr } = await supabase.from("memory_items").insert(memoryRows);
   if (memErr) throw memErr;
-  const userBreakdown = knownUsers.map(
-    (u) => `${u}: ${memoryRows.filter((r) => r.user_id === u).length}`
-  ).join(", ");
+
+  const userBreakdown = knownUsers
+    .map((u) => `${u}: ${memoryRows.filter((r) => r.user_id === u).length}`)
+    .join(", ");
   console.log(`[ingest] Inserted ${memoryRows.length} memories (${userBreakdown})`);
 
-  // Chunk and embed document text
   console.log("[ingest] Chunking and embedding document...");
-  const chunks = chunkText(doc.text);
+  const chunks = chunkText(params.text);
   const chunkEmbeddings = await embedTexts(chunks);
-
-  // Chunks are stored once per document (not per user) — memories handle user routing
   const chunkRows = chunks.map((content, idx) => ({
     document_id: sourceRow.id,
     user_id: params.userId,
     chunk_index: idx,
     content,
     token_estimate: Math.ceil(content.length / 4),
-    metadata: { title: doc.title },
+    metadata: { title: params.title },
     embedding: chunkEmbeddings[idx],
   }));
 
-  // Delete old chunks for this document
-  await supabase
-    .from("document_chunks")
-    .delete()
-    .eq("document_id", sourceRow.id);
-
-  const { error: chunkErr } = await supabase
-    .from("document_chunks")
-    .insert(chunkRows);
+  await supabase.from("document_chunks").delete().eq("document_id", sourceRow.id);
+  const { error: chunkErr } = await supabase.from("document_chunks").insert(chunkRows);
   if (chunkErr) throw chunkErr;
   console.log(`[ingest] Inserted ${chunkRows.length} chunks`);
 
   return {
     documentId: sourceRow.id,
-    title: doc.title,
+    title: params.title,
     summary: extracted.document_summary,
     memoriesInserted: memoryRows.length,
     chunksInserted: chunkRows.length,
   };
+}
+
+const GITHUB_TEXT_EXTENSIONS = new Set([
+  ".md", ".txt", ".json", ".ts", ".tsx", ".js", ".jsx", ".py", ".java", ".go", ".rs", ".rb", ".php", ".cs", ".cpp", ".c", ".h", ".hpp", ".sql", ".yml", ".yaml", ".toml", ".ini", ".env", ".html", ".css", ".scss", ".xml", ".csv", ".sh", ".bat", ".ps1",
+]);
+
+function isLikelyTextPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  if (lower.includes("/node_modules/") || lower.includes("/.git/")) return false;
+  const dot = lower.lastIndexOf(".");
+  if (dot === -1) return false;
+  const ext = lower.slice(dot);
+  return GITHUB_TEXT_EXTENSIONS.has(ext);
+}
+
+function parseGithubRepoUrl(repoUrl: string): { owner: string; repo: string; branch?: string; subPath?: string } {
+  const m = repoUrl.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?(?:\/tree\/([^\/]+)(?:\/(.*))?)?\/?$/i);
+  if (!m) throw new Error("Invalid GitHub repo URL");
+  return {
+    owner: m[1],
+    repo: m[2],
+    branch: m[3],
+    subPath: m[4],
+  };
+}
+
+async function githubRequest(path: string) {
+  const token = process.env.GITHUB_TOKEN;
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "relai-ingestor",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`https://api.github.com${path}`, { headers });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`GitHub API ${res.status}: ${txt}`);
+  }
+  return res.json();
+}
+
+export async function ingestGithubRepo(params: {
+  userId: string;
+  repoUrl: string;
+  branch?: string;
+  maxFiles?: number;
+}) {
+  const { owner, repo, branch: parsedBranch, subPath } = parseGithubRepoUrl(params.repoUrl);
+  const repoMeta = await githubRequest(`/repos/${owner}/${repo}`);
+  const branch = params.branch || parsedBranch || repoMeta.default_branch;
+
+  console.log(`[github] Listing files for ${owner}/${repo}@${branch}...`);
+  const tree = await githubRequest(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+  const files = (tree.tree || [])
+    .filter((n: any) => n.type === "blob")
+    .map((n: any) => n.path as string)
+    .filter((p: string) => isLikelyTextPath(p))
+    .filter((p: string) => !subPath || p.startsWith(subPath));
+
+  const maxFiles = Math.min(params.maxFiles ?? 40, 200);
+  const selected = files.slice(0, maxFiles);
+  console.log(`[github] ${selected.length} text files selected for ingestion`);
+
+  const results: any[] = [];
+  const errors: any[] = [];
+
+  for (const filePath of selected) {
+    try {
+      const contentData = await githubRequest(
+        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(branch)}`
+      );
+      if (!contentData || Array.isArray(contentData) || !contentData.content) continue;
+
+      const text = Buffer.from(contentData.content, "base64").toString("utf-8");
+      if (!text.trim() || text.includes("\u0000")) continue;
+
+      const result = await ingestTextSource({
+        userId: params.userId,
+        // Keep source compatible with current DB check constraint.
+        // GitHub origin is still preserved in metadata/source_file_id/source_url.
+        source: "gdrive",
+        sourceFileId: `${owner}/${repo}:${branch}:${filePath}`,
+        sourceUrl: `https://github.com/${owner}/${repo}/blob/${branch}/${filePath}`,
+        title: `${owner}/${repo}/${filePath}`,
+        mimeType: "text/plain",
+        text,
+        metadata: {
+          owner,
+          repo,
+          branch,
+          path: filePath,
+          sha: contentData.sha,
+        },
+      });
+      results.push(result);
+    } catch (err: any) {
+      console.error(`[github] Failed ${filePath}:`, err.message);
+      errors.push({ file: filePath, error: err.message });
+    }
+  }
+
+  return {
+    owner,
+    repo,
+    branch,
+    totalFiles: files.length,
+    selectedFiles: selected.length,
+    ingested: results.length,
+    failed: errors.length,
+    results,
+    errors,
+  };
+}
+
+// ── Main pipeline ────────────────────────────────────────────────────
+
+export async function ingestDriveLink(params: {
+  userId: string;
+  driveUrl: string;
+  accessToken: string;
+}) {
+  const fileId = extractDriveFileId(params.driveUrl);
+  if (!fileId)
+    throw new Error("Could not extract file ID from Google Drive URL.");
+
+  console.log(`[ingest] Fetching Drive file ${fileId}...`);
+  const doc = await fetchDriveText(fileId, params.accessToken);
+  console.log(`[ingest] Got "${doc.title}" (${doc.text.length} chars)`);
+  return ingestTextSource({
+    userId: params.userId,
+    source: "gdrive",
+    sourceFileId: fileId,
+    sourceUrl: doc.sourceUrl || params.driveUrl,
+    title: doc.title,
+    mimeType: doc.mimeType,
+    text: doc.text,
+    metadata: doc.metadata,
+  });
 }
 
 // ── Folder ingestion ─────────────────────────────────────────────────
