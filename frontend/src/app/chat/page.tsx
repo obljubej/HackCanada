@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, isSessionExpired, clearLoginTime, markLoginTime } from "@/lib/supabase"
 import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, resetChat, getUsers } from "@/lib/api"
 
 interface Memory {
@@ -47,17 +47,29 @@ export default function ChatPage() {
   const [availableUsers, setAvailableUsers] = useState<string[]>(["default-user"])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Check auth on mount
+  // Check auth + session expiry on mount
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session || isSessionExpired()) {
+        // Session expired or missing — force sign out
+        clearLoginTime()
+        await supabase.auth.signOut()
         window.location.href = "/"
         return
       }
+      // Refresh the login timestamp on each valid page load
+      markLoginTime()
+      const fullName = session.user.user_metadata?.full_name || session.user.email || ""
+      // Ensure a profiles row exists (handles OAuth and edge cases)
+      await supabase.from("profiles").upsert({
+        id: session.user.id,
+        email: session.user.email || "",
+        full_name: fullName,
+      }, { onConflict: "id" })
       setUser({
         id: session.user.id,
         email: session.user.email || "",
-        name: session.user.user_metadata?.full_name || session.user.email || "",
+        name: fullName,
       })
       setAuthChecked(true)
     })
@@ -87,6 +99,7 @@ export default function ChatPage() {
   }, [messages, loading])
 
   const handleSignOut = async () => {
+    clearLoginTime()
     await supabase.auth.signOut()
     window.location.href = "/"
   }

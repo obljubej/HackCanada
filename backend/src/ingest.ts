@@ -3,6 +3,42 @@ import { google } from "googleapis";
 import { Type } from "@google/genai";
 import { supabase, ai } from "./config.js";
 
+// ── Known users ──────────────────────────────────────────────────────
+
+// Fetch known users dynamically from the profiles table in Supabase.
+// Uses the full_name column as the user identifier for memory routing.
+let cachedUsers: string[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 60_000; // 1 minute
+
+export async function getKnownUsers(): Promise<string[]> {
+  const now = Date.now();
+  if (cachedUsers && now - cacheTimestamp < CACHE_TTL) return cachedUsers;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .not("full_name", "is", null);
+
+  if (error) {
+    console.warn("[users] Failed to fetch profiles:", error.message);
+    return cachedUsers || ["default-user"];
+  }
+
+  const users = (data || [])
+    .map((row: any) => row.full_name as string)
+    .filter(Boolean);
+
+  // Always include "default-user" so legacy memories remain accessible
+  if (!users.includes("default-user")) {
+    users.unshift("default-user");
+  }
+  cachedUsers = users;
+  cacheTimestamp = now;
+  console.log(`[users] Known users: ${cachedUsers.join(", ")}`);
+  return cachedUsers;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 export function extractDriveFileId(url: string): string | null {
@@ -152,6 +188,10 @@ const memorySchema = {
               dates: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
           },
+          relevant_users: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
         },
         required: [
           "memory_type",
@@ -162,6 +202,7 @@ const memorySchema = {
           "recency_score",
           "source_span",
           "metadata",
+          "relevant_users",
         ],
       },
     },
@@ -169,7 +210,10 @@ const memorySchema = {
   required: ["title", "document_summary", "memories"],
 };
 
-const SYSTEM_PROMPT = `You are a structured memory extraction engine.
+function buildSystemPrompt(knownUsers: string[]): string {
+  const userList = knownUsers.map((u: string) => `  - "${u}"`).join("\n");
+
+  return `You are a structured memory extraction engine.
 
 Your job is to read a document and extract durable, useful memories for a personal memory layer.
 
@@ -187,6 +231,17 @@ Scoring rules:
 - salience: importance inside this document, from 0.0 to 1.0
 - recency_score: how current the information appears, from 0.0 to 1.0
 
+Known users in the system:
+${userList}
+
+User routing rules for relevant_users:
+- For each memory, set relevant_users to the list of known user IDs it is most relevant to.
+- If a memory is specifically about a person (e.g., their role, preference, task), route it to that person's user ID.
+- If a memory is general knowledge (e.g., a project fact, company info, shared context), route it to ALL known users.
+- If a memory mentions multiple people, route it to each mentioned person.
+- Only use user IDs from the known users list above. Never invent new user IDs.
+- When in doubt, route to all known users — it's better to over-share than to miss.
+
 Rules:
 - Do not invent information.
 - Prefer durable knowledge over filler.
@@ -194,12 +249,14 @@ Rules:
 - Keep content concise and retrieval-friendly.
 - Always include exactly one summary item if there is meaningful content.
 - If the document is low-value, return fewer memories.`;
+}
 
 async function extractMemories(
   title: string,
   mimeType: string,
   sourceUrl: string,
-  text: string
+  text: string,
+  knownUsers: string[]
 ) {
   const prompt = `Extract durable memory objects from this Google Drive document.
 
@@ -212,12 +269,12 @@ Document text:
 ${text}`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.0-flash",
     contents: prompt,
     config: {
       responseMimeType: "application/json",
       responseSchema: memorySchema,
-      systemInstruction: SYSTEM_PROMPT,
+      systemInstruction: buildSystemPrompt(knownUsers),
     },
   });
 
@@ -244,6 +301,10 @@ export async function ingestDriveLink(params: {
   const fileId = extractDriveFileId(params.driveUrl);
   if (!fileId)
     throw new Error("Could not extract file ID from Google Drive URL.");
+
+  // Fetch known users for memory routing
+  const knownUsers = await getKnownUsers();
+  console.log(`[ingest] Routing to known users: ${knownUsers.join(", ")}`);
 
   console.log(`[ingest] Fetching Drive file ${fileId}...`);
   const doc = await fetchDriveText(fileId, params.accessToken);
@@ -280,7 +341,8 @@ export async function ingestDriveLink(params: {
     doc.title,
     doc.mimeType,
     doc.sourceUrl,
-    doc.text
+    doc.text,
+    knownUsers
   );
   console.log(
     `[ingest] Extracted ${extracted.memories.length} memories`
@@ -292,19 +354,33 @@ export async function ingestDriveLink(params: {
     extracted.memories.map((m: any) => m.content)
   );
 
-  const memoryRows = extracted.memories.map((m: any, i: number) => ({
-    user_id: params.userId,
-    document_id: sourceRow.id,
-    memory_type: m.memory_type,
-    content: m.content,
-    weight: m.weight,
-    confidence: m.confidence,
-    salience: m.salience,
-    recency_score: m.recency_score,
-    source_span: m.source_span,
-    metadata: m.metadata,
-    embedding: memoryEmbeddings[i],
-  }));
+  // Route each memory to the relevant users identified by Gemini.
+  // If a memory has no relevant_users or lists unknown users, fall back to params.userId.
+  const memoryRows: any[] = [];
+  for (let i = 0; i < extracted.memories.length; i++) {
+    const m = extracted.memories[i];
+    let targetUsers: string[] = (m.relevant_users || []).filter(
+      (u: string) => knownUsers.includes(u)
+    );
+    if (targetUsers.length === 0) {
+      targetUsers = [params.userId];
+    }
+    for (const uid of targetUsers) {
+      memoryRows.push({
+        user_id: uid,
+        document_id: sourceRow.id,
+        memory_type: m.memory_type,
+        content: m.content,
+        weight: m.weight,
+        confidence: m.confidence,
+        salience: m.salience,
+        recency_score: m.recency_score,
+        source_span: m.source_span,
+        metadata: m.metadata,
+        embedding: memoryEmbeddings[i],
+      });
+    }
+  }
 
   // Delete old memories for this document (re-ingest scenario)
   await supabase
@@ -316,13 +392,17 @@ export async function ingestDriveLink(params: {
     .from("memory_items")
     .insert(memoryRows);
   if (memErr) throw memErr;
-  console.log(`[ingest] Inserted ${memoryRows.length} memories`);
+  const userBreakdown = knownUsers.map(
+    (u) => `${u}: ${memoryRows.filter((r) => r.user_id === u).length}`
+  ).join(", ");
+  console.log(`[ingest] Inserted ${memoryRows.length} memories (${userBreakdown})`);
 
   // Chunk and embed document text
   console.log("[ingest] Chunking and embedding document...");
   const chunks = chunkText(doc.text);
   const chunkEmbeddings = await embedTexts(chunks);
 
+  // Chunks are stored once per document (not per user) — memories handle user routing
   const chunkRows = chunks.map((content, idx) => ({
     document_id: sourceRow.id,
     user_id: params.userId,

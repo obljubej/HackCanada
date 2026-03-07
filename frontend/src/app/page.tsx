@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, markLoginTime } from '@/lib/supabase'
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
@@ -16,9 +16,10 @@ export default function AuthPage() {
 
   useEffect(() => {
     setMounted(true)
-    // Check if already logged in
+    // Check if already logged in (including OAuth redirect)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
+        markLoginTime()
         window.location.href = '/chat'
       }
     })
@@ -53,7 +54,7 @@ export default function AuthPage() {
           return
         }
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { full_name: name } }
@@ -63,7 +64,16 @@ export default function AuthPage() {
           setLoading(false)
           return
         }
+        // Create a row in the profiles table for the new user
+        if (signUpData.user) {
+          await supabase.from('profiles').upsert({
+            id: signUpData.user.id,
+            email,
+            full_name: name,
+          }, { onConflict: 'id' })
+        }
       }
+      markLoginTime()
       window.location.href = '/chat'
     } catch (err: any) {
       setError(err.message || 'Authentication failed')
