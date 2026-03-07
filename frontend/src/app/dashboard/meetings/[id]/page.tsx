@@ -53,22 +53,82 @@ declare global {
   }
 }
 
-// ── Voice helpers ────────────────────────────────────────────
+// ── ElevenLabs TTS ─────────────────────────────────────────
 
-function speak(text: string, onEnd?: () => void) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return
+const ELEVENLABS_API_KEY = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || ""
+// Rachel voice — professional, clear US English
+const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
+
+let currentAudioSource: AudioBufferSourceNode | null = null
+
+async function speakElevenLabs(text: string, onEnd?: () => void) {
+  // Stop any currently playing audio
+  currentAudioSource?.stop()
+  currentAudioSource = null
+
+  if (!ELEVENLABS_API_KEY) {
+    // Fallback to browser TTS
+    speakBrowser(text, onEnd)
+    return
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_turbo_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.2,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    )
+
+    if (!response.ok) throw new Error(`ElevenLabs error: ${response.status}`)
+
+    const arrayBuffer = await response.arrayBuffer()
+    const audioCtx = new AudioContext()
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+    const source = audioCtx.createBufferSource()
+    source.buffer = audioBuffer
+    source.connect(audioCtx.destination)
+    source.onended = () => {
+      currentAudioSource = null
+      onEnd?.()
+    }
+    source.start(0)
+    currentAudioSource = source
+  } catch (err) {
+    console.warn("[TTS] ElevenLabs failed, falling back to browser TTS:", err)
+    speakBrowser(text, onEnd)
+  }
+}
+
+function speakBrowser(text: string, onEnd?: () => void) {
+  if (typeof window === "undefined" || !window.speechSynthesis) { onEnd?.(); return }
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.rate = 1.05
-  utterance.pitch = 1
-  utterance.volume = 1
-  // Pick a decent voice
-  const voices = window.speechSynthesis.getVoices()
-  const preferred = voices.find(v => v.name.includes("Samantha") || v.name.includes("Google US English") || v.lang === "en-US")
-  if (preferred) utterance.voice = preferred
   if (onEnd) utterance.onend = onEnd
   window.speechSynthesis.speak(utterance)
 }
+
+// Main speak function — uses ElevenLabs
+function speak(text: string, onEnd?: () => void) {
+  speakElevenLabs(text, onEnd)
+}
+
 
 // ── Main Component ───────────────────────────────────────────
 
