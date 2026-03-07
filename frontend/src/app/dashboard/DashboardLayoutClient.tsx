@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { supabase, isSessionExpired, clearLoginTime, markLoginTime } from "@/lib/supabase"
 import { getNotifications } from "@/lib/db"
 import { cn } from "@/lib/utils"
+import { RoleProvider, useRole } from "@/lib/role-context"
 
 const MANAGER_NAV = [
   { href: "/dashboard", label: "Overview", exact: true, icon: "M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" },
@@ -112,6 +113,44 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
   if (!mounted) return null
 
   return (
+    <RoleProvider dbRole={userRole}>
+      <DashboardShell
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+        unreadCount={unreadCount}
+        userName={userName}
+        userEmail={userEmail}
+        handleSignOut={handleSignOut}
+      >
+        {children}
+      </DashboardShell>
+    </RoleProvider>
+  )
+}
+
+/** Inner component that can use the role context */
+function DashboardShell({
+  mobileOpen, setMobileOpen, unreadCount, userName, userEmail, handleSignOut, children,
+}: {
+  mobileOpen: boolean
+  setMobileOpen: (v: boolean) => void
+  unreadCount: number
+  userName: string
+  userEmail: string
+  handleSignOut: () => void
+  children: React.ReactNode
+}) {
+  const pathname = usePathname()
+  const { isManager, effectiveRole, toggleRole, isOverridden } = useRole()
+
+  const NAV = isManager ? MANAGER_NAV : EMPLOYEE_NAV
+
+  const displayRole = effectiveRole === "manager" ? "Manager" : "Employee"
+  const roleColor = isManager
+    ? "from-violet-500 to-indigo-500"
+    : "from-emerald-500 to-teal-500"
+
+  return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Mobile overlay */}
       {mobileOpen && (
@@ -136,12 +175,27 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
           </div>
         </div>
 
-        {/* Role badge */}
-        <div className="px-4 py-3 border-b border-border">
-          <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold text-white bg-gradient-to-r ${roleColor}`}>
-            <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse" />
-            {displayRole} View
+        {/* Role badge + Switch button */}
+        <div className="px-4 py-3 border-b border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold text-white bg-gradient-to-r ${roleColor}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse" />
+              {displayRole} View
+            </div>
+            <button
+              onClick={toggleRole}
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground hover:border-primary/40 transition-all"
+              title={`Switch to ${isManager ? "Employee" : "Manager"} view`}
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+              </svg>
+              Switch
+            </button>
           </div>
+          {isOverridden && (
+            <p className="text-[10px] text-amber-400/70 leading-tight">Viewing as {displayRole} (demo mode)</p>
+          )}
         </div>
 
         {/* Nav */}
@@ -258,3 +312,6 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
     </div>
   )
 }
+
+// Re-export useRole for convenient imports
+export { useRole } from "@/lib/role-context"

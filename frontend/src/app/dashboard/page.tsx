@@ -5,6 +5,7 @@ import Link from "next/link"
 import { getProjects, getEmployees, getNotifications } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { useRole } from "@/lib/role-context"
 import type { Project, Employee, Notification } from "@/lib/types"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -453,6 +454,53 @@ export default function DashboardPage() {
   }
 
   const isManager = userRole === "manager" || userRole === "ceo" || userRole === "cto"
+
+  if (isManager) {
+    return <ManagerDashboard projects={projects} employees={employees} notifications={notifications} />
+  }
+  return <EmployeeDashboard projects={projects} notifications={notifications} />
+}
+
+export default function DashboardPage() {
+  const { isManager } = useRole()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+
+        const [projs, emps, ns] = await Promise.all([
+          getProjects().catch(() => []),
+          getEmployees().catch(() => []),
+          getNotifications(session.user.id).catch(() => [])
+        ])
+        setProjects(projs)
+        setEmployees(emps)
+        setNotifications(ns)
+      } catch {
+        // silently fail, tables may not exist yet
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading dashboard…</p>
+        </div>
+      </div>
+    )
+  }
 
   if (isManager) {
     return <ManagerDashboard projects={projects} employees={employees} notifications={notifications} />

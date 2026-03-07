@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Alert, AlertDescription } from "@/components/ui/Alert"
+import { useRole } from "@/lib/role-context"
 import type { Employee } from "@/lib/types"
 
 const ROLES = [
@@ -293,6 +294,7 @@ function DepartmentGroup({ dept, employees, onEdit, onDelete }: {
 }
 
 export default function EmployeesPage() {
+  const { isManager } = useRole()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [isManager, setIsManager] = useState(false)
@@ -315,12 +317,6 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     load()
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) return
-      const { data: profile } = await supabase.from("profiles").select("user_role").eq("id", session.user.id).single()
-      const role = profile?.user_role || "employee"
-      setIsManager(role === "manager" || role === "ceo" || role === "cto")
-    })
   }, [load])
 
   const handleSave = async (data: Omit<Employee, "id" | "created_at">) => {
