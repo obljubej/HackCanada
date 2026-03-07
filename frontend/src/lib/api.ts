@@ -147,19 +147,41 @@ export const notificationsAPI = {
     apiPost("/notifications", body),
 };
 
+const MOCK_MEETING = {
+  id: "test-id-123",
+  title: "Sprint Planning",
+  status: "active",
+  projects: { title: "Project Atlas", description: "" },
+  started_at: new Date().toISOString(),
+  scheduled_at: new Date().toISOString(),
+  participants: [
+    { id: "1", name: "Sarah Chen", role: "Senior Frontend Developer", availability: true },
+    { id: "2", name: "Daniel Rodriguez", role: "Full Stack Developer", availability: true },
+    { id: "3", name: "Priya Sharma", role: "UI/UX Designer", availability: true },
+  ],
+  transcript: [
+    { speaker: "Sarah Chen", message: "Should we tackle the authentication flow first?", created_at: new Date(Date.now() - 60000).toISOString() },
+    { speaker: "AI Assistant", message: "Yes, I recommend starting with the OAuth integration based on project history.", created_at: new Date().toISOString() }
+  ],
+  summary: {
+    summary_text: "The team met to discuss the project architecture. Key technical decisions were made regarding data management.",
+    key_decisions: ["Frontend will use React + GraphQL", "Sprint 1 will start Monday"],
+    action_items: [
+      { task: "Build authentication UI components", assignee: "Sarah Chen", due_date: "Mar 12" }
+    ]
+  }
+};
+
 export const meetingsAPI = {
-  list: () => apiGet("/meetings"),
-  get: (id: string) => apiGet(`/meetings/${id}`),
-  create: (body: { title: string; project_id?: string; scheduled_at?: string; host_id?: string; participant_ids?: string[] }) =>
-    apiPost("/meetings", body),
-  start: (id: string) => apiPost(`/meetings/${id}/start`, {}),
-  end: (id: string) => apiPost(`/meetings/${id}/end`, {}),
-  addTranscript: (id: string, body: { speaker: string; message: string }) =>
-    apiPost(`/meetings/${id}/transcript`, body),
-  ask: (id: string, body: { question: string; userId?: string }) =>
-    apiPost(`/meetings/${id}/ask`, body),
-  getSummary: (id: string) => apiGet(`/meetings/${id}/summary`),
-  generateSummary: (id: string) => apiPost(`/meetings/${id}/summary/generate`, {}),
+  list: async () => [MOCK_MEETING, { ...MOCK_MEETING, id: "456", status: "scheduled" }, { ...MOCK_MEETING, id: "789", status: "ended", title: "Design Review" }],
+  get: async (id: string) => ({ ...MOCK_MEETING, id }),
+  create: async (body: any) => ({ ...MOCK_MEETING, ...body, id: "new-id" }),
+  start: async (id: string) => ({ message: "started" }),
+  end: async (id: string) => ({ message: "ended" }),
+  addTranscript: async (id: string, body: any) => ({ message: "added" }),
+  ask: async (id: string, body: any) => ({ answer: "This is a mock response from the AI assistant." }),
+  getSummary: async (id: string) => MOCK_MEETING.summary,
+  generateSummary: async (id: string) => MOCK_MEETING.summary,
 };
 
 

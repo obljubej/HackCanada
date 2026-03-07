@@ -85,6 +85,47 @@ function ManagerDashboard({ projects, employees, notifications }: {
 
   return (
     <div className="p-6 lg:p-8 space-y-8">
+      {/* ── Feature Hub ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Link href="/dashboard/projects" className="group relative overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-violet-500/10 p-5 hover:border-violet-500/40 hover:from-violet-500/10 hover:to-violet-500/15 transition-all">
+          <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-violet-500/10 blur-2xl -translate-y-1/2 translate-x-1/2" />
+          <div className="relative flex items-start gap-4">
+            <div className="flex-shrink-0 h-11 w-11 rounded-xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center">
+              <svg className="h-5 w-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-bold text-foreground">Project Intelligence</p>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 font-semibold border border-violet-500/20">Feature 1</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">Upload project briefs — AI assembles your optimal team from employee skills & availability.</p>
+              <p className="text-xs font-semibold text-violet-400 mt-2 group-hover:underline">Open Dashboard →</p>
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/meetings" className="group relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 p-5 hover:border-emerald-500/40 hover:from-emerald-500/10 hover:to-emerald-500/15 transition-all">
+          <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl -translate-y-1/2 translate-x-1/2" />
+          <div className="relative flex items-start gap-4">
+            <div className="flex-shrink-0 h-11 w-11 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center">
+              <svg className="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-bold text-foreground">AI Voice Meeting Agent</p>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">Feature 2</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">Voice-to-voice AI meetings powered by ElevenLabs. Get summaries, action items & recommendations.</p>
+              <p className="text-xs font-semibold text-emerald-400 mt-2 group-hover:underline">Open Meeting Room →</p>
+            </div>
+          </div>
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
