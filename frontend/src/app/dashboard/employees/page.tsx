@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from "@/lib/db"
-import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent } from "@/components/ui/Card"
@@ -297,7 +296,6 @@ export default function EmployeesPage() {
   const { isManager } = useRole()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
-  const [isManager, setIsManager] = useState(false)
   const [search, setSearch] = useState("")
   const [view, setView] = useState<"grid" | "org">("grid")
   const [showModal, setShowModal] = useState(false)

@@ -99,17 +99,6 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
     window.location.href = "/"
   }
 
-  const isManager = userRole === "manager" || userRole === "ceo" || userRole === "cto"
-  const NAV = isManager ? MANAGER_NAV : EMPLOYEE_NAV
-
-  const displayRole = userRole === "manager" ? "Manager" :
-    userRole === "ceo" ? "CEO" :
-    userRole === "cto" ? "CTO" : "Employee"
-
-  const roleColor = isManager
-    ? "from-violet-500 to-indigo-500"
-    : "from-emerald-500 to-teal-500"
-
   if (!mounted) return null
 
   return (
