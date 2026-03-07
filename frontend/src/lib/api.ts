@@ -33,6 +33,26 @@ export async function ingestDriveUrl(driveUrl: string, userId = "default-user") 
   return res.json();
 }
 
+export async function ingestGithubRepo(
+  repoUrl: string,
+  userId = "default-user",
+  branch?: string,
+  maxFiles?: number
+) {
+  const res = await fetch(`${API_URL}/ingest/github`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repoUrl, userId, branch, maxFiles }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || "Request failed");
+  }
+
+  return res.json();
+}
+
 export async function getOAuthStatus() {
   const res = await fetch(`${API_URL}/oauth/status`);
   return res.json();

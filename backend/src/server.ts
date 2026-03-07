@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import { createOAuth2Client } from "./config.js";
-import { ingestDriveLink, ingestDriveFolder, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
+import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
 import { meetingsRouter } from "./meetings.js";
@@ -96,7 +96,30 @@ apiRouter.post("/ingest", async (req, res) => {
   }
 });
 
-apiRouter.post("/search", async (req, res) => {
+app.post("/ingest/github", async (req, res) => {
+  const { repoUrl, userId = "default-user", branch, maxFiles } = req.body;
+  if (!repoUrl) {
+    res.status(400).json({ error: "repoUrl is required" });
+    return;
+  }
+
+  try {
+    const result = await ingestGithubRepo({
+      userId,
+      repoUrl,
+      branch,
+      maxFiles,
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error("[ingest/github] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Search route ─────────────────────────────────────────────────────
+
+app.post("/search", async (req, res) => {
   const { query, userId = "default-user" } = req.body;
   if (!query) { res.status(400).json({ error: "query is required" }); return; }
   try {
