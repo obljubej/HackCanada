@@ -1,5 +1,5 @@
 {
-  "name": "relai-backend",
+  "name": "memory-layer",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -11,13 +11,11 @@
     "@google/genai": "^1.0.0",
     "@supabase/supabase-js": "^2.49.0",
     "backboard-sdk": "^1.5.3",
-    "cors": "^2.8.5",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
     "googleapis": "^144.0.0"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",

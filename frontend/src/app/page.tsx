@@ -16,6 +16,12 @@ export default function AuthPage() {
 
   useEffect(() => {
     setMounted(true)
+    // Check if already logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        window.location.href = '/chat'
+      }
+    })
   }, [])
 
   useEffect(() => {
@@ -37,15 +43,42 @@ export default function AuthPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    if (isLogin) {
-      setTimeout(() => setLoading(false), 2000)
-    } else {
-      setTimeout(() => setLoading(false), 2000)
+
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) {
+          setError(error.message)
+          setLoading(false)
+          return
+        }
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: name } }
+        })
+        if (error) {
+          setError(error.message)
+          setLoading(false)
+          return
+        }
+      }
+      window.location.href = '/chat'
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed')
+      setLoading(false)
     }
   }
 
   const handleGoogleLogin = async () => {
-    // Placeholder
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/chat`
+      }
+    })
+    if (error) setError(error.message)
   }
 
   const toggleMode = () => {
@@ -205,9 +238,6 @@ export default function AuthPage() {
 
           {/* Links */}
           <div className="text-center space-y-3 mt-8">
-            <a href="#" className="block text-gray-500 hover:text-gray-300 text-xs uppercase font-semibold tracking-wide transition-colors duration-200">
-              Forgot your password?
-            </a>
             <div>
               <span className="text-gray-500 text-xs">
                 {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
