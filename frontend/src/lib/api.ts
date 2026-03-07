@@ -42,6 +42,13 @@ export function getOAuthLoginUrl() {
   return `${API_URL}/oauth/login`;
 }
 
+export async function getUsers(): Promise<string[]> {
+  const res = await fetch(`${API_URL}/users`);
+  if (!res.ok) return ["default-user"];
+  const data = await res.json();
+  return data.users || ["default-user"];
+}
+
 export async function resetChat(userId = "default-user") {
   await fetch(`${API_URL}/ask/reset`, {
     method: "POST",

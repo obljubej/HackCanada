@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
-import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, resetChat } from "@/lib/api"
+import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, resetChat, getUsers } from "@/lib/api"
 
 interface Memory {
   id: string
@@ -43,6 +43,8 @@ export default function ChatPage() {
   const [driveUrl, setDriveUrl] = useState("")
   const [ingesting, setIngesting] = useState(false)
   const [ingestResult, setIngestResult] = useState("")
+  const [memoryUserId, setMemoryUserId] = useState("default-user")
+  const [availableUsers, setAvailableUsers] = useState<string[]>(["default-user"])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Check auth on mount
@@ -73,6 +75,11 @@ export default function ChatPage() {
     getOAuthStatus()
       .then((d) => setGoogleConnected(d.connected))
       .catch(() => {})
+    getUsers()
+      .then((users) => {
+        setAvailableUsers(users.length > 0 ? users : ["default-user"])
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -93,7 +100,7 @@ export default function ChatPage() {
     setLoading(true)
 
     try {
-      const data = await askQuestion(q, user.id, threadId ?? undefined)
+      const data = await askQuestion(q, memoryUserId, threadId ?? undefined)
       setThreadId(data.threadId)
       setMessages((prev) => [
         ...prev,
@@ -115,7 +122,7 @@ export default function ChatPage() {
 
   const handleReset = async () => {
     if (!user) return
-    await resetChat(user.id)
+    await resetChat(memoryUserId)
     setThreadId(null)
     setMessages([
       {
@@ -130,7 +137,7 @@ export default function ChatPage() {
     setIngesting(true)
     setIngestResult("")
     try {
-      const data = await ingestDriveUrl(driveUrl.trim(), user.id)
+      const data = await ingestDriveUrl(driveUrl.trim(), memoryUserId)
       if (data.ingested !== undefined) {
         setIngestResult(`Ingested ${data.ingested} documents (${data.results?.reduce((s: number, r: any) => s + r.memoriesInserted, 0) || 0} memories)`)
       } else {
@@ -169,6 +176,20 @@ export default function ChatPage() {
             RelAI
           </a>
           <span className="text-sm text-gray-500">Memory Chat</span>
+          <select
+            value={memoryUserId}
+            onChange={(e) => {
+              setMemoryUserId(e.target.value)
+              setThreadId(null)
+            }}
+            className="ml-2 px-2 py-1 text-xs bg-white/5 border border-white/20 rounded-lg text-gray-300 focus:outline-none focus:border-white/40 cursor-pointer"
+          >
+            {availableUsers.map((u) => (
+              <option key={u} value={u} className="bg-black text-white">
+                {u}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-3">
           <button
