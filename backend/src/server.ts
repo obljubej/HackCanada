@@ -3,8 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
-import { createOAuth2Client, supabase } from "./config.js";
-import { ingestDriveLink, ingestDriveFolder, isDriveFolderUrl } from "./ingest.js";
+import { createOAuth2Client } from "./config.js";
+import { ingestDriveLink, ingestDriveFolder, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
 
@@ -143,15 +143,8 @@ app.post("/ask/reset", (req, res) => {
 
 app.get("/users", async (_req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("memory_items")
-      .select("user_id")
-      .order("user_id");
-
-    if (error) throw error;
-
-    const uniqueUsers = [...new Set((data || []).map((d: any) => d.user_id))];
-    res.json({ users: uniqueUsers });
+    const users = await getKnownUsers();
+    res.json({ users });
   } catch (err: any) {
     console.error("[users] Error:", err.message);
     res.status(500).json({ error: err.message });
