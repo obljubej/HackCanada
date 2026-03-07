@@ -87,3 +87,22 @@ npm run dev
 ## License
 
 This project is part of Hack Canada 2024.
+
+---
+
+## RelAI UI/UX Redesign & Theme Configuration
+
+The frontend has been upgraded with a highly polished, premium SaaS UI featuring dark-first theming, custom glassmorphism, and responsive components.
+
+### Environment Variables
+To run the full stack successfully, ensure your `frontend/.env.local` contains:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXT_PUBLIC_API_URL=http://localhost:5000  # Points to the backend Express server (default)
+```
+
+### Customizing the Theme
+The look and feel is explicitly controlled by modern Tailwind CSS v4 variables to ensure a sleek and strict design system. To tweak colors, spacing, or element radiuses:
+- Edit **`frontend/src/app/globals.css`**: Adjust core design tokens like `--color-background`, `--color-primary`, or `--radius-md`.
+- **UI Components**: Modify specific structural or animating primitives located in `frontend/src/components/ui/`.
