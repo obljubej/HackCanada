@@ -149,14 +149,14 @@ export default function MeetingsHub() {
         <div className="flex items-center gap-4">
           {/* Navigation Links */}
           <div className="hidden sm:flex items-center gap-6 pr-4 border-r border-border/50">
-            <Link 
+            {/* <Link 
               href="/dashboard" 
               className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
             >
               Dashboard
-            </Link>
+            </Link> */}
             <Link 
-              href="/chat" 
+              href="/dashboard/chat" 
               className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-2"
             >
               <svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

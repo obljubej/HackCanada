@@ -52,7 +52,7 @@ app.get("/oauth/callback", async (req, res) => {
 
     console.log("[oauth] Tokens stored successfully");
     // Redirect back to the frontend after OAuth
-    res.redirect("http://localhost:3000/chat");
+    res.redirect("http://localhost:3000/dashboard/chat");
   } catch (err: any) {
     console.error("[oauth] Token exchange failed:", err.message);
     res.status(500).send("OAuth token exchange failed: " + err.message);
@@ -207,7 +207,7 @@ app.get("/api/github/oauth/callback", async (req, res) => {
     }
 
     // Redirect the user back to the chat interface natively
-    res.redirect("http://localhost:3000/chat?github_connected=true");
+    res.redirect("http://localhost:3000/dashboard/chat?github_connected=true");
 
   } catch (err: any) {
     console.error("[github/oauth] Token exchange failed:", err.message);

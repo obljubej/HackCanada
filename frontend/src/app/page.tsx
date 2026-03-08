@@ -33,7 +33,7 @@ const FEATURES = [
     iconBg: "bg-emerald-500/20 text-emerald-400",
     description: "Voice-to-voice AI meetings with ElevenLabs. Ask questions, get employee recommendations, and receive AI-generated summaries with action items.",
     tags: ["Voice Conversations", "ElevenLabs TTS", "Live Transcript", "Auto Summary"],
-    href: "/meetings",
+    href: "/dashboard/meetings",
     cta: "Open Meeting Room →",
     badge: "Feature 2",
   },
@@ -53,7 +53,7 @@ export default function AuthPage() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         markLoginTime()
-        window.location.href = "/chat"
+        window.location.href = "/dashboard/chat"
       }
     })
   }, [])
@@ -82,7 +82,7 @@ export default function AuthPage() {
         }
       }
       markLoginTime()
-      window.location.href = "/chat"
+      window.location.href = "/dashboard/chat"
     } catch (err: any) {
       setError(err.message || "Authentication failed")
       setLoading(false)
@@ -94,7 +94,7 @@ export default function AuthPage() {
     setLoading(true)
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/chat` },
+      options: { redirectTo: `${window.location.origin}/dashboard/chat` },
     })
     if (oauthError) { setError(oauthError.message); setLoading(false) }
   }
