@@ -292,6 +292,116 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   return res.embeddings!.map((e: any) => e.values);
 }
 
+export async function ingestPersonalClaim(params: {
+  userId: string;
+  claim: string;
+  claimType?: string;
+}) {
+  const claim = params.claim.trim();
+  if (!claim) {
+    throw new Error("claim is required");
+  }
+
+  const nowIso = new Date().toISOString();
+  const claimHash = crypto
+    .createHash("sha1")
+    .update(`${params.userId}:${claim}:${nowIso}`)
+    .digest("hex")
+    .slice(0, 16);
+
+  const sourceFileId = `personal-claim:${params.userId}:${claimHash}`;
+  const checksum = crypto.createHash("sha256").update(claim).digest("hex");
+
+  const { data: sourceRow, error: sourceErr } = await supabase
+    .from("source_documents")
+    .insert({
+      user_id: params.userId,
+      source: "gdrive",
+      source_file_id: sourceFileId,
+      source_url: "relai://personal-claim",
+      title: `Personal claim (${new Date().toLocaleString()})`,
+      mime_type: "text/plain",
+      raw_text: claim,
+      checksum,
+      metadata: {
+        kind: "personal-claim",
+        created_at: nowIso,
+      },
+    })
+    .select()
+    .single();
+
+  if (sourceErr) throw sourceErr;
+
+  const [embedding] = await embedTexts([claim]);
+  const lowered = claim.toLowerCase();
+  const inferredCategory =
+    lowered.includes("i learned") ||
+    lowered.includes("my skill") ||
+    lowered.includes("i know") ||
+    lowered.includes("experienced in")
+      ? "skill"
+      : "general";
+
+  // Keep memory_type aligned with DB check constraint values.
+  const allowedMemoryTypes = new Set([
+    "fact",
+    "task",
+    "project",
+    "preference",
+    "person",
+    "summary",
+  ]);
+  const requestedType = (params.claimType || "").trim().toLowerCase();
+  const memoryType = allowedMemoryTypes.has(requestedType) ? requestedType : "fact";
+
+  const { data: memoryRow, error: memErr } = await supabase
+    .from("memory_items")
+    .insert({
+      user_id: params.userId,
+      document_id: sourceRow.id,
+      memory_type: memoryType,
+      content: claim,
+      weight: 0.95,
+      confidence: 0.9,
+      salience: 0.85,
+      recency_score: 1,
+      source_span: {
+        start_char: 0,
+        end_char: claim.length,
+      },
+      metadata: {
+        source: "self-claim",
+        mode: "personal-ai",
+        claim_category: inferredCategory,
+      },
+      embedding,
+    })
+    .select()
+    .single();
+
+  if (memErr) throw memErr;
+
+  const { error: chunkErr } = await supabase.from("document_chunks").insert({
+    document_id: sourceRow.id,
+    user_id: params.userId,
+    chunk_index: 0,
+    content: claim,
+    token_estimate: Math.ceil(claim.length / 4),
+    metadata: { title: sourceRow.title, kind: "personal-claim" },
+    embedding,
+  });
+
+  if (chunkErr) throw chunkErr;
+
+  return {
+    documentId: sourceRow.id,
+    memoryId: memoryRow.id,
+    memoryType,
+    content: claim,
+  };
+}
+
 async function ingestTextSource(params: {
   userId: string;
   source: string;

@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import { createOAuth2Client } from "./config.js";
-import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, ingestGithubCommit, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
+import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, ingestGithubCommit, ingestPersonalClaim, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
 import { meetingsRouter } from "./meetings.js";
@@ -53,7 +53,7 @@ app.get("/oauth/callback", async (req, res) => {
 
     console.log("[oauth] Tokens stored successfully");
     // Redirect back to the frontend after OAuth
-    res.redirect("http://localhost:3000/dashboard/chat");
+    res.redirect("http://localhost:3000/dashboard");
   } catch (err: any) {
     console.error("[oauth] Token exchange failed:", err.message);
     res.status(500).send("OAuth token exchange failed: " + err.message);
@@ -330,6 +330,26 @@ apiRouter.post("/ask/reset", (req, res) => {
   const { userId = "default-user" } = req.body;
   resetThread(userId);
   res.json({ success: true });
+});
+
+apiRouter.post("/claims", async (req, res) => {
+  const { userId = "default-user", claim, claimType } = req.body;
+  if (!claim || typeof claim !== "string") {
+    res.status(400).json({ error: "claim is required" });
+    return;
+  }
+
+  try {
+    const result = await ingestPersonalClaim({
+      userId,
+      claim,
+      claimType,
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error("[claims] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 apiRouter.get("/users", async (_req, res) => {
