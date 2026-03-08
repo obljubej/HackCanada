@@ -221,11 +221,11 @@ function DashboardShell({
             <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">AI Tools</p>
           </div>
           <Link
-            href="/chat"
+            href="/dashboard/chat"
             onClick={() => setMobileOpen(false)}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              pathname === "/chat"
+              pathname === "/dashboard/chat"
                 ? "bg-white/10 text-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
             )}
@@ -275,7 +275,9 @@ function DashboardShell({
 
           <div className="flex-1">
             <h1 className="text-sm font-semibold text-foreground">
-              {NAV.find((n) => n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + "/"))?.label ?? "Dashboard"}
+              {pathname === "/dashboard/chat"
+                ? "Memory Chat"
+                : NAV.find((n) => n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + "/"))?.label ?? "Dashboard"}
             </h1>
           </div>
 
@@ -294,7 +296,7 @@ function DashboardShell({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className={cn("flex-1", pathname === "/dashboard/chat" ? "overflow-hidden" : "overflow-y-auto")}>
           {children}
         </main>
       </div>
