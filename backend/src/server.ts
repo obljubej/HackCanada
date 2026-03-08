@@ -138,7 +138,7 @@ app.get("/api/github/oauth/login", (req, res) => {
   const supabaseUserId = (req.query.supabase_user_id as string) || "default-user";
   const state = Buffer.from(JSON.stringify({ supabaseUserId })).toString("base64url");
 
-  const redirectUri = encodeURIComponent("http://localhost:5001/api/github/oauth/callback");
+  const redirectUri = encodeURIComponent("http://localhost:5000/api/github/oauth/callback");
   const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo&state=${state}&prompt=consent`;
   
   res.redirect(url);

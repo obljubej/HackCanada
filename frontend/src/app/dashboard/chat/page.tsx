@@ -432,7 +432,7 @@ export default function DashboardChatPage() {
             </div>
             <div className="pt-0 sm:pt-5 w-full sm:w-auto flex flex-col gap-2">
               {/* Pass the real Supabase userId so the backend tags ingested data correctly */}
-              <a href={`http://localhost:5001/api/github/oauth/login?supabase_user_id=${encodeURIComponent(userId || "default-user")}`}>
+              <a href={`http://localhost:5000/api/github/oauth/login?supabase_user_id=${encodeURIComponent(userId || "default-user")}`}>
                 <Button type="button" className="w-full sm:w-auto bg-slate-900 border border-slate-700 hover:bg-slate-800 text-white">
                   Login with GitHub
                 </Button>
