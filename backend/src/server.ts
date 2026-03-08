@@ -117,6 +117,104 @@ app.post("/ingest/github", async (req, res) => {
   }
 });
 
+// ── GitHub OAuth Login Flow ──────────────────────────────────────────
+
+app.get("/api/github/oauth/login", (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  if (!clientId) {
+    res.status(500).send("GitHub OAuth is not configured. Missing GITHUB_CLIENT_ID.");
+    return;
+  }
+  
+  const redirectUri = encodeURIComponent("http://localhost:5001/api/github/oauth/callback");
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo`;
+  
+  res.redirect(url);
+});
+
+app.get("/api/github/oauth/callback", async (req, res) => {
+  const code = req.query.code as string;
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+  if (!code || !clientId || !clientSecret) {
+    res.status(400).send("Invalid OAuth callback parameters or missing enviroment configuration.");
+    return;
+  }
+
+  try {
+    // 1. Exchange code for access token
+    const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+      }),
+    });
+    
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+    
+    if (!accessToken) {
+      throw new Error("Failed to retrieve access token from GitHub.");
+    }
+
+    // 2. Fetch authenticated user profile
+    const userRes = await fetch("https://api.github.com/user", {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Accept": "application/vnd.github.v3+json"
+      }
+    });
+    
+    const userData = await userRes.json();
+    const githubUsername = userData.login;
+    
+    if (!githubUsername) {
+      throw new Error("Failed to retrieve username from GitHub.");
+    }
+    
+    console.log(`[github/oauth] Successfully authenticated user: ${githubUsername}`);
+    
+    // 3. Queue their repos for Background Ingestion seamlessly!
+    // (We reuse the existing logic by triggering the same fetch)
+    const reposRes = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=5`);
+    if (reposRes.ok) {
+        const repos = await reposRes.json();
+        const userId = "default-user"; // Tie to identical dummy user map used by Hackathon frontend
+        
+        if (Array.isArray(repos) && repos.length > 0) {
+           Promise.allSettled(repos.map(async (repo: any) => {
+             try {
+               console.log(`[github/oauth] Queuing extraction for ${repo.html_url}`);
+               await ingestGithubRepo({
+                 userId,
+                 repoUrl: repo.html_url,
+                 branch: repo.default_branch,
+                 maxFiles: 20,
+                 oauthToken: accessToken
+               });
+             } catch (e) {
+               console.error(`[github/oauth] Error extracting ${repo.html_url}:`, e);
+             }
+           }));
+        }
+    }
+
+    // Redirect the user back to the chat interface natively
+    res.redirect("http://localhost:3000/chat?github_connected=true");
+
+  } catch (err: any) {
+    console.error("[github/oauth] Token exchange failed:", err.message);
+    res.status(500).send("GitHub OAuth sequence failed: " + err.message);
+  }
+});
+
 // ── GitHub Account Connection (Automatic Repos Fetch) ─────────────────
 
 app.post("/api/github/connect", async (req, res) => {

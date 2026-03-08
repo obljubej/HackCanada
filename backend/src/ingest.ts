@@ -430,8 +430,8 @@ function parseGithubRepoUrl(repoUrl: string): { owner: string; repo: string; bra
   };
 }
 
-async function githubRequest(path: string) {
-  const token = process.env.GITHUB_TOKEN;
+async function githubRequest(path: string, oauthToken?: string) {
+  const token = oauthToken || process.env.GITHUB_TOKEN;
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "relai-ingestor",
@@ -451,13 +451,14 @@ export async function ingestGithubRepo(params: {
   repoUrl: string;
   branch?: string;
   maxFiles?: number;
+  oauthToken?: string;
 }) {
   const { owner, repo, branch: parsedBranch, subPath } = parseGithubRepoUrl(params.repoUrl);
-  const repoMeta = await githubRequest(`/repos/${owner}/${repo}`);
+  const repoMeta = await githubRequest(`/repos/${owner}/${repo}`, params.oauthToken);
   const branch = params.branch || parsedBranch || repoMeta.default_branch;
 
   console.log(`[github] Listing files for ${owner}/${repo}@${branch}...`);
-  const tree = await githubRequest(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+  const tree = await githubRequest(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`, params.oauthToken);
   const files = (tree.tree || [])
     .filter((n: any) => n.type === "blob")
     .map((n: any) => n.path as string)
@@ -474,7 +475,8 @@ export async function ingestGithubRepo(params: {
   for (const filePath of selected) {
     try {
       const contentData = await githubRequest(
-        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(branch)}`
+        `/repos/${owner}/${repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(branch)}`,
+        params.oauthToken
       );
       if (!contentData || Array.isArray(contentData) || !contentData.content) continue;
 
