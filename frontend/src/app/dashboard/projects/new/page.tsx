@@ -116,32 +116,38 @@ export default function NewProjectPage() {
         manager_id: session?.user.id,
       })
 
-      // Assign selected candidates
+      // Group assignments by employee so we don't violate the unique constraint
+      const groupedAssignments: Record<string, string[]> = {}
       for (const [role, empId] of Object.entries(selectedCandidates)) {
         if (empId) {
-          await assignEmployee(project.id, empId, role)
+          if (!groupedAssignments[empId]) groupedAssignments[empId] = []
+          groupedAssignments[empId].push(role)
+        }
+      }
 
-          // Find skill gaps for this employee
-          const ranking = rankings.find((r) => r.role === role)
-          const candidate = ranking?.candidates.find((c) => c.employee_id === empId)
-          if (candidate?.missing_skills.length && session?.user.id) {
-            await createNotification({
-              user_id: session.user.id,
-              type: "skill_gap",
-              message: `${candidate.employee_name} is missing skills for ${role} on "${title}": ${candidate.missing_skills.slice(0, 3).join(", ")}. Consider upskilling before project start.`,
-              read: false,
-            })
-          }
+      for (const [empId, roles] of Object.entries(groupedAssignments)) {
+        const combinedRoles = roles.join(", ")
+        await assignEmployee(project.id, empId, combinedRoles)
 
-          // Assignment notification
-          if (session?.user.id) {
-            await createNotification({
-              user_id: session.user.id,
-              type: "assignment",
-              message: `${candidate?.employee_name ?? "Employee"} has been assigned as ${role} on project "${title}".`,
-              read: false,
-            })
-          }
+        // Find candidate info for notifications from any matching ranking
+        const candidate = rankings.flatMap((r) => r.candidates).find((c) => c.employee_id === empId)
+
+        if (candidate?.missing_skills.length && session?.user.id) {
+          await createNotification({
+            user_id: session.user.id,
+            type: "skill_gap",
+            message: `${candidate.employee_name} is missing skills for their role(s) on "${title}": ${candidate.missing_skills.slice(0, 3).join(", ")}. Consider upskilling before project start.`,
+            read: false,
+          })
+        }
+
+        if (session?.user.id) {
+          await createNotification({
+            user_id: session.user.id,
+            type: "assignment",
+            message: `${candidate?.employee_name ?? "Employee"} has been assigned as ${combinedRoles} on project "${title}".`,
+            read: false,
+          })
         }
       }
 
