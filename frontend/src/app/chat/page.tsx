@@ -390,7 +390,7 @@ export default function ChatPage() {
                 </div>
               </div>
               <div className="pt-0 sm:pt-5 w-full sm:w-auto flex flex-col gap-2">
-                <a href="http://localhost:5001/api/github/oauth/login">
+                <a href="http://localhost:5000/api/github/oauth/login">
                   <Button type="button" className="w-full sm:w-auto bg-slate-900 border border-slate-700 hover:bg-slate-800 text-white">
                     Login with GitHub
                   </Button>

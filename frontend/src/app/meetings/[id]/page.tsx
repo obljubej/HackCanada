@@ -43,7 +43,7 @@ async function speakBackendTTS(text: string, onEnd?: () => void) {
   currentAudioSource = null
 
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
     const response = await fetch(`${apiUrl}/voice/text-to-speech`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

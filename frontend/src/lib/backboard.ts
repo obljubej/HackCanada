@@ -12,7 +12,7 @@ import type {
 } from "@/lib/types"
 
 const BACKBOARD_URL =
-  process.env.NEXT_PUBLIC_BACKBOARD_URL || "http://localhost:5001"
+  process.env.NEXT_PUBLIC_BACKBOARD_URL || "http://localhost:5000"
 
 // ─── Analyze Project Document ───────────────────────────────────────────────
 

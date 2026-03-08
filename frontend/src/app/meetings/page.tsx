@@ -85,7 +85,7 @@ export default function MeetingsHub() {
       })
 
     // Fetch known users for invites
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api"}/users`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/users`)
       .then(res => res.json())
       .then(data => {
         // We'll mock some emails combined with the names to satisfy the email search requirement

@@ -126,7 +126,7 @@ app.get("/api/github/oauth/login", (req, res) => {
     return;
   }
   
-  const redirectUri = encodeURIComponent("http://localhost:5001/api/github/oauth/callback");
+  const redirectUri = encodeURIComponent("http://localhost:5000/api/github/oauth/callback");
   const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo`;
   
   res.redirect(url);
@@ -358,7 +358,7 @@ app.get("/", (_req, res) => {
 
 // ── Start ────────────────────────────────────────────────────────────
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`\n  RelAI Backend running on http://localhost:${PORT}`);
   console.log(`  OAuth:  http://localhost:${PORT}/oauth/login`);
