@@ -52,11 +52,7 @@ app.get("/oauth/callback", async (req, res) => {
 
     console.log("[oauth] Tokens stored successfully");
     // Redirect back to the frontend after OAuth
-<<<<<<< Updated upstream
-    res.redirect("http://localhost:3000/dashboard/chat");
-=======
     res.redirect("http://localhost:3000/dashboard");
->>>>>>> Stashed changes
   } catch (err: any) {
     console.error("[oauth] Token exchange failed:", err.message);
     res.status(500).send("OAuth token exchange failed: " + err.message);
