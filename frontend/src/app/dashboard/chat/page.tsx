@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, ingestGithubRepo, resetChat, getUsers } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
@@ -34,6 +35,9 @@ const memoryTypeBadgeColors: Record<string, string> = {
 }
 
 export default function DashboardChatPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const cloneFromQuery = searchParams.get("clone")
   const [ready, setReady] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([
@@ -70,9 +74,21 @@ export default function DashboardChatPage() {
       .then((d) => setGoogleConnected(d.connected))
       .catch(() => {})
     getUsers()
-      .then((users) => setAvailableUsers(users.length > 0 ? users : ["default-user"]))
+      .then((users) => {
+        const resolved = users.length > 0 ? users : ["default-user"]
+        setAvailableUsers(resolved)
+        if (cloneFromQuery && resolved.includes(cloneFromQuery)) {
+          setMemoryUserId(cloneFromQuery)
+        }
+      })
       .catch(() => {})
-  }, [])
+  }, [cloneFromQuery])
+
+  useEffect(() => {
+    if (!cloneFromQuery || !availableUsers.includes(cloneFromQuery)) return
+    setMemoryUserId(cloneFromQuery)
+    setThreadId(null)
+  }, [cloneFromQuery, availableUsers])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -180,8 +196,10 @@ export default function DashboardChatPage() {
           <select
             value={memoryUserId}
             onChange={(e) => {
-              setMemoryUserId(e.target.value)
+              const selected = e.target.value
+              setMemoryUserId(selected)
               setThreadId(null)
+              router.replace(`/dashboard/chat?clone=${encodeURIComponent(selected)}`)
             }}
             className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors"
           >

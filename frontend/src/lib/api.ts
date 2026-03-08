@@ -63,10 +63,20 @@ export function getOAuthLoginUrl() {
 }
 
 export async function getUsers(): Promise<string[]> {
-  const res = await fetch(`${API_URL}/users`);
-  if (!res.ok) return ["default-user"];
-  const data = await res.json();
-  return data.users || ["default-user"];
+  const urls = [`${API_URL}/users`, `${API_URL}/api/users`];
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (Array.isArray(data.users) && data.users.length > 0) return data.users;
+    } catch {
+      // try next candidate URL
+    }
+  }
+
+  return ["default-user"];
 }
 
 export async function resetChat(userId = "default-user") {
