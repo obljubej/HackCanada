@@ -1,36 +1,52 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
+async function fetchWithFallback(
+  paths: string[],
+  init?: RequestInit
+): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (const path of paths) {
+    try {
+      const res = await fetch(`${API_URL}${path}`, init);
+      if (res.status === 404) continue;
+      return res;
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+
+  if (lastError) throw lastError;
+  throw new Error("Endpoint not found");
+}
+
+async function parseOrThrow(res: Response) {
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || "Request failed");
+  }
+  return res.json();
+}
+
 export async function askQuestion(question: string, userId = "default-user", threadId?: string) {
   const body: any = { question, userId };
   if (threadId) body.threadId = threadId;
 
-  const res = await fetch(`${API_URL}/ask`, {
+  const res = await fetchWithFallback(["/api/ask", "/ask"], {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || "Request failed");
-  }
-
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function ingestDriveUrl(driveUrl: string, userId = "default-user") {
-  const res = await fetch(`${API_URL}/ingest`, {
+  const res = await fetchWithFallback(["/api/ingest", "/ingest"], {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ driveUrl, userId }),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || "Request failed");
-  }
-
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function ingestGithubRepo(
@@ -39,23 +55,17 @@ export async function ingestGithubRepo(
   branch?: string,
   maxFiles?: number
 ) {
-  const res = await fetch(`${API_URL}/ingest/github`, {
+  const res = await fetchWithFallback(["/api/ingest/github", "/ingest/github"], {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repoUrl, userId, branch, maxFiles }),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || "Request failed");
-  }
-
-  return res.json();
+  return parseOrThrow(res);
 }
 
 export async function getOAuthStatus() {
-  const res = await fetch(`${API_URL}/oauth/status`);
-  return res.json();
+  const res = await fetchWithFallback(["/api/oauth/status", "/oauth/status"]);
+  return parseOrThrow(res);
 }
 
 export function getOAuthLoginUrl() {
@@ -80,11 +90,41 @@ export async function getUsers(): Promise<string[]> {
 }
 
 export async function resetChat(userId = "default-user") {
-  await fetch(`${API_URL}/ask/reset`, {
+  const res = await fetchWithFallback(["/api/ask/reset", "/ask/reset"], {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId }),
   });
+  await parseOrThrow(res);
+}
+
+export async function addPersonalClaim(
+  claim: string,
+  userId = "default-user",
+  claimType?: string
+) {
+  const urls = [`${API_URL}/api/claims`, `${API_URL}/claims`];
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim, userId, claimType }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || "Request failed");
+      }
+
+      return res.json();
+    } catch {
+      // try next candidate URL
+    }
+  }
+
+  throw new Error("Could not reach claims endpoint");
 }
 
 // ── Organization API ──────────────────────────────────────────────────────────

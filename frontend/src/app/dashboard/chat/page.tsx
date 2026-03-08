@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, ingestGithubRepo, resetChat, getUsers } from "@/lib/api"
+import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, ingestGithubRepo, resetChat, getUsers, addPersonalClaim } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
@@ -23,6 +23,12 @@ interface Message {
   role: "user" | "assistant"
   content: string
   memories?: Memory[]
+}
+
+interface ClaimSaveResult {
+  memoryId?: string
+  documentId?: string
+  memoryType?: string
 }
 
 const memoryTypeBadgeColors: Record<string, string> = {
@@ -57,6 +63,10 @@ export default function DashboardChatPage() {
   const [ingestResult, setIngestResult] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [memoryUserId, setMemoryUserId] = useState("default-user")
   const [availableUsers, setAvailableUsers] = useState<string[]>(["default-user"])
+  const [personalMode, setPersonalMode] = useState(false)
+  const [personalClaim, setPersonalClaim] = useState("")
+  const [savingClaim, setSavingClaim] = useState(false)
+  const [lastClaimSave, setLastClaimSave] = useState<ClaimSaveResult | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Validate session (dashboard layout already guards auth; this just grabs the user id)
@@ -102,8 +112,10 @@ export default function DashboardChatPage() {
     setMessages((prev) => [...prev, { role: "user", content: q }])
     setLoading(true)
 
+    const chatUserId = personalMode && userId ? userId : memoryUserId
+
     try {
-      const data = await askQuestion(q, memoryUserId, threadId ?? undefined)
+      const data = await askQuestion(q, chatUserId, threadId ?? undefined)
       setThreadId(data.threadId)
       setMessages((prev) => [
         ...prev,
@@ -123,8 +135,43 @@ export default function DashboardChatPage() {
     setLoading(false)
   }
 
+  const handleTeachAndSend = async () => {
+    if (!personalMode || !userId || loading) {
+      await handleSend()
+      return
+    }
+
+    const claim = input.trim()
+    if (!claim) return
+
+    setLoading(true)
+    setIngestResult(null)
+
+    try {
+      const saved = await addPersonalClaim(claim, userId)
+      setLastClaimSave({
+        memoryId: saved.memoryId,
+        documentId: saved.documentId,
+        memoryType: saved.memoryType,
+      })
+      setIngestResult({
+        type: "success",
+        text: `Saved to DB ✓ type=${saved.memoryType || "fact"} memoryId=${saved.memoryId || "n/a"}`,
+      })
+    } catch (err: any) {
+      setIngestResult({
+        type: "error",
+        text: err.message || "Failed to save personal claim",
+      })
+    }
+
+    setLoading(false)
+    await handleSend()
+  }
+
   const handleReset = async () => {
-    await resetChat(memoryUserId)
+    const chatUserId = personalMode && userId ? userId : memoryUserId
+    await resetChat(chatUserId)
     setThreadId(null)
     setMessages([
       {
@@ -132,6 +179,34 @@ export default function DashboardChatPage() {
         content: "Chat reset. Ask me anything about your documents.",
       },
     ])
+  }
+
+  const handleAddClaim = async () => {
+    if (!userId) return
+    const claim = personalClaim.trim()
+    if (!claim || savingClaim) return
+
+    setSavingClaim(true)
+    setIngestResult(null)
+    try {
+      const result = await addPersonalClaim(claim, userId)
+      setLastClaimSave({
+        memoryId: result.memoryId,
+        documentId: result.documentId,
+        memoryType: result.memoryType,
+      })
+      setIngestResult({
+        type: "success",
+        text: `Saved to DB ✓ type=${result.memoryType || "fact"} memoryId=${result.memoryId || "n/a"}`,
+      })
+      setPersonalClaim("")
+    } catch (err: any) {
+      setIngestResult({
+        type: "error",
+        text: err.message || "Failed to save personal claim",
+      })
+    }
+    setSavingClaim(false)
   }
 
   const handleIngest = async () => {
@@ -211,6 +286,24 @@ export default function DashboardChatPage() {
 
         <div className="h-5 w-px bg-border hidden sm:block" />
 
+        <button
+          type="button"
+          onClick={() => {
+            setPersonalMode((prev) => !prev)
+            setThreadId(null)
+          }}
+          className={`inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-medium transition-colors ${
+            personalMode
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+              : "border-input bg-background text-muted-foreground hover:text-foreground"
+          }`}
+          title="Toggle personal AI mode"
+        >
+          Personal AI {personalMode ? "On" : "Off"}
+        </button>
+
+        <div className="h-5 w-px bg-border hidden sm:block" />
+
         {/* Ingest toggle */}
         <Button
           variant={showIngest ? "secondary" : "ghost"}
@@ -255,6 +348,33 @@ export default function DashboardChatPage() {
         }`}
       >
         <div className="mx-auto max-w-4xl px-4 sm:px-6 flex flex-col gap-4">
+          {personalMode && (
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+              <div className="flex-1 w-full space-y-1">
+                <label className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Teach Your AI</label>
+                <Input
+                  type="text"
+                  value={personalClaim}
+                  onChange={(e) => setPersonalClaim(e.target.value)}
+                  placeholder='Example: "I learned React and can build production dashboards."'
+                  className="w-full bg-background"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddClaim()}
+                  disabled={savingClaim}
+                />
+              </div>
+              <div className="w-full sm:w-auto">
+                <Button
+                  onClick={handleAddClaim}
+                  disabled={savingClaim || !personalClaim.trim()}
+                  isLoading={savingClaim}
+                  className="w-full sm:w-auto"
+                >
+                  {savingClaim ? "Saving..." : "Save Claim"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Drive */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
             <div className="flex-1 w-full space-y-1">
@@ -400,7 +520,7 @@ export default function DashboardChatPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
-                handleSend()
+                handleTeachAndSend()
               }
             }}
             placeholder="Ask RelAI about your documents…"
@@ -409,12 +529,12 @@ export default function DashboardChatPage() {
             rows={1}
           />
           <div className="absolute right-2 bottom-1.5">
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              className="h-[40px] w-[40px] rounded-lg shadow-sm"
-            >
+              <Button
+                size="icon"
+                onClick={handleTeachAndSend}
+                disabled={loading || !input.trim()}
+                className="h-[40px] w-[40px] rounded-lg shadow-sm"
+              >
               <svg className="h-4 w-4 translate-x-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
               </svg>
@@ -422,6 +542,13 @@ export default function DashboardChatPage() {
             </Button>
           </div>
         </div>
+        {personalMode && lastClaimSave && (
+          <div className="mx-auto mt-2 max-w-4xl rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-300">
+            Saved to database: memoryId <span className="font-mono">{lastClaimSave.memoryId || "n/a"}</span>
+            {" · "}documentId <span className="font-mono">{lastClaimSave.documentId || "n/a"}</span>
+            {" · "}type <span className="font-mono">{lastClaimSave.memoryType || "fact"}</span>
+          </div>
+        )}
         <div className="mx-auto max-w-4xl pt-2 text-center">
           <p className="text-[11px] text-muted-foreground font-medium">
             RelAI can make mistakes. Consider verifying important information.
