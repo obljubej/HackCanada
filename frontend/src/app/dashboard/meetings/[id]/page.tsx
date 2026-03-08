@@ -254,7 +254,7 @@ export default function MeetingRoomPage() {
   const handleEndMeeting = async () => {
     stopListening()
     await meetingsAPI.end(meetingId)
-    router.push(`/meetings/${meetingId}/summary`)
+    router.push(`/dashboard/meetings/${meetingId}/summary`)
   }
 
   const handleVoiceToggle = () => {

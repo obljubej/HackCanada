@@ -107,7 +107,7 @@ function ManagerDashboard({ projects, employees, notifications }: {
           </div>
         </Link>
 
-        <Link href="/meetings" className="group relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 p-5 hover:border-emerald-500/40 hover:from-emerald-500/10 hover:to-emerald-500/15 transition-all">
+        <Link href="/dashboard/meetings" className="group relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 p-5 hover:border-emerald-500/40 hover:from-emerald-500/10 hover:to-emerald-500/15 transition-all">
           <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-emerald-500/10 blur-2xl -translate-y-1/2 translate-x-1/2" />
           <div className="relative flex items-start gap-4">
             <div className="flex-shrink-0 h-11 w-11 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center">
