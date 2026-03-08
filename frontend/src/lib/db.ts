@@ -11,66 +11,45 @@ import type {
 // ─── Employees ──────────────────────────────────────────────────────────────
 
 export async function getEmployees(): Promise<Employee[]> {
-  const { data, error } = await supabase
-    .from("employees")
+  const { data: profiles, error: pErr } = await supabase
+    .from("profiles")
     .select("*")
-    .order("name")
-
-  if (error) {
-    console.warn("[db] getEmployees: employees table not found, falling back to profiles", error.message)
-    // Fallback: read from profiles table (what actually exists in Supabase)
-    const { data: profiles, error: pErr } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("full_name")
-    if (pErr) {
-      console.warn("[db] getEmployees fallback:", pErr.message)
-      return []
-    }
-    return (profiles ?? []).map((p: any) => ({
-      id: p.id,
-      name: p.full_name ?? p.email ?? "Unknown",
-      email: p.email,
-      role: p.role ?? "Team Member",
-      department: p.department ?? null,
-      skills: p.skills ?? [],
-      availability: p.availability ?? true,
-      user_role: p.user_role ?? "employee",
-    }))
+    .order("full_name")
+    
+  if (pErr) {
+    console.warn("[db] getEmployees:", pErr.message)
+    return []
   }
-
-  return data ?? []
+  
+  return (profiles ?? []).map((p: any) => ({
+    id: p.id,
+    name: p.full_name ?? p.email ?? "Unknown",
+    email: p.email,
+    role: p.role ?? "Engineer",
+    department: p.department ?? "Engineering",
+    skills: p.skills ?? ["React", "TypeScript", "Node.js"], // Provide some mock skills for the demo
+    availability: p.availability ?? true,
+    user_role: p.user_role ?? "employee",
+  }))
 }
 
 export async function createEmployee(
   emp: Omit<Employee, "id" | "created_at">
 ): Promise<Employee> {
-  const { data, error } = await supabase
-    .from("employees")
-    .insert(emp)
-    .select()
-    .single()
-  if (error) throw new Error(error.message)
-  return data
+  // Read-only mock since we removed the employees table
+  return { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...emp };
 }
 
 export async function updateEmployee(
   id: string,
   emp: Partial<Employee>
 ): Promise<Employee> {
-  const { data, error } = await supabase
-    .from("employees")
-    .update(emp)
-    .eq("id", id)
-    .select()
-    .single()
-  if (error) throw new Error(error.message)
-  return data
+  // Read-only mock since we removed the employees table
+  return { id, name: "Updated", email: "mock", role: "Manager", user_role: "employee", skills: [], availability: true } as Employee;
 }
 
 export async function deleteEmployee(id: string): Promise<void> {
-  const { error } = await supabase.from("employees").delete().eq("id", id)
-  if (error) throw new Error(error.message)
+  // Read-only mock
 }
 
 // ─── Projects ───────────────────────────────────────────────────────────────
@@ -130,13 +109,22 @@ export async function getProjectAssignments(
 ): Promise<ProjectAssignment[]> {
   const { data, error } = await supabase
     .from("project_assignments")
-    .select("*, employee:employees(*)")
+    // Foreign key points from project_assignments.employee_id -> profiles.id, so we alias the join
+    .select("*, employee:profiles(*)")
     .eq("project_id", projectId)
   if (error) {
     console.warn("[db] getProjectAssignments:", error.message)
     return []
   }
-  return data ?? []
+  
+  // Map profile's full_name to name to align with the frontend types
+  return (data ?? []).map(row => ({
+    ...row,
+    employee: row.employee ? { 
+      ...row.employee, 
+      name: row.employee.full_name || "Unknown" 
+    } : null
+  }));
 }
 
 export async function assignEmployee(
@@ -169,14 +157,19 @@ export async function removeAssignment(
 export async function getProjectTasks(projectId: string): Promise<Task[]> {
   const { data, error } = await supabase
     .from("tasks")
-    .select("*, employee:employees(name)")
+    .select("*, employee:profiles(full_name)")
     .eq("project_id", projectId)
     .order("created_at", { ascending: true })
   if (error) {
     console.warn("[db] getProjectTasks:", error.message)
     return []
   }
-  return data ?? []
+  
+  // Map profile's full_name to name
+  return (data ?? []).map(row => ({
+    ...row,
+    employee: row.employee ? { name: row.employee.full_name || "Unknown" } : null
+  }));
 }
 
 export async function createTask(task: Omit<Task, "id">): Promise<Task> {

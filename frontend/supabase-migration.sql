@@ -4,32 +4,8 @@
 -- Safe to run multiple times (uses CREATE TABLE IF NOT EXISTS)
 -- ============================================================
 
--- ── Employees ────────────────────────────────────────────────
-create table if not exists employees (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  email       text unique,
-  role        text not null default 'Engineer',
-  department  text,
-  skills      text[] default '{}',
-  availability boolean default true,
-  manager_id  uuid references employees(id),
-  user_role   text not null default 'employee', -- 'manager' | 'employee' | 'ceo' | 'cto'
-  created_at  timestamptz default now()
-);
-
--- Seed employees from existing profiles (safe – ignores conflicts)
-insert into employees (id, name, email, role, department, user_role)
-select
-  p.id,
-  coalesce(p.full_name, p.email),
-  p.email,
-  coalesce(ur.role, 'Employee'),
-  null,
-  coalesce(ur.role, 'employee')
-from profiles p
-left join user_roles ur on ur.user_id = p.id
-on conflict (email) do nothing;
+-- ── Employees (Removed: Now using profiles table directly) ────
+-- See profiles table for base users.
 
 -- ── Projects ─────────────────────────────────────────────────
 create table if not exists projects (
@@ -37,7 +13,7 @@ create table if not exists projects (
   title       text not null,
   description text,
   status      text default 'planning',  -- planning | active | on_hold | completed
-  manager_id  uuid references employees(id),
+  manager_id  uuid references profiles(id) on delete set null,
   notion_url  text,
   created_at  timestamptz default now()
 );
@@ -46,7 +22,7 @@ create table if not exists projects (
 create table if not exists project_assignments (
   id          uuid primary key default gen_random_uuid(),
   project_id  uuid references projects(id) on delete cascade,
-  employee_id uuid references employees(id) on delete cascade,
+  employee_id uuid references profiles(id) on delete cascade,
   role        text,
   unique(project_id, employee_id)
 );
@@ -57,7 +33,7 @@ create table if not exists tasks (
   project_id  uuid references projects(id) on delete cascade,
   title       text not null,
   status      text default 'todo',      -- todo | in_progress | done
-  assigned_to uuid references employees(id),
+  assigned_to uuid references profiles(id) on delete set null,
   due_date    date,
   priority    text default 'medium',    -- low | medium | high
   created_at  timestamptz default now()
@@ -78,7 +54,6 @@ alter table if exists meetings
   add column if not exists project_id uuid references projects(id) on delete set null;
 
 -- ── Disable RLS for hackathon dev ─────────────────────────────
-alter table if exists employees disable row level security;
 alter table if exists projects disable row level security;
 alter table if exists project_assignments disable row level security;
 alter table if exists tasks disable row level security;
