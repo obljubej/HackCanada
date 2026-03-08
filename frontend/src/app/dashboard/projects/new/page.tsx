@@ -132,15 +132,6 @@ export default function NewProjectPage() {
         // Find candidate info for notifications from any matching ranking
         const candidate = rankings.flatMap((r) => r.candidates).find((c) => c.employee_id === empId)
 
-        if (candidate?.missing_skills.length && session?.user.id) {
-          await createNotification({
-            user_id: session.user.id,
-            type: "skill_gap",
-            message: `${candidate.employee_name} is missing skills for their role(s) on "${title}": ${candidate.missing_skills.slice(0, 3).join(", ")}. Consider upskilling before project start.`,
-            read: false,
-          })
-        }
-
         if (session?.user.id) {
           await createNotification({
             user_id: session.user.id,
@@ -327,11 +318,6 @@ export default function NewProjectPage() {
                               </div>
                             </div>
                           </div>
-                          {c.missing_skills.length > 0 && (
-                            <div className="mt-2 text-[11px] text-amber-400/80">
-                              ⚠ Missing: {c.missing_skills.slice(0, 3).join(", ")}
-                            </div>
-                          )}
                         </button>
                       )
                     })}

@@ -641,8 +641,10 @@ export async function ingestGithubRepo(params: {
     .filter((p: string) => isLikelyTextPath(p))
     .filter((p: string) => !subPath || p.startsWith(subPath));
 
-  const maxFiles = Math.min(params.maxFiles ?? 40, 200);
-  const selected = files.slice(0, maxFiles);
+  const selected =
+    typeof params.maxFiles === "number" && params.maxFiles > 0
+      ? files.slice(0, params.maxFiles)
+      : files;
   console.log(`[github] ${selected.length} text files selected for ingestion`);
 
   const results: any[] = [];

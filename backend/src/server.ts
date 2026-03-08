@@ -207,9 +207,12 @@ app.get("/api/github/oauth/callback", async (req, res) => {
     console.log(`[github/oauth] GitHub user authenticated: ${githubUsername} → Supabase userId: ${userId}`);
     
     // 3. Fire-and-forget repo ingestion tagged with the real Supabase userId
-    const reposRes = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=5`, {
+    const reposRes = await fetch(
+      "https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all&affiliation=owner,collaborator,organization_member",
+      {
       headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/vnd.github.v3+json" }
-    });
+      }
+    );
     if (reposRes.ok) {
       const repos = await reposRes.json();
       if (Array.isArray(repos) && repos.length > 0) {
@@ -220,7 +223,7 @@ app.get("/api/github/oauth/callback", async (req, res) => {
               userId,          // ← real Supabase UUID, not "default-user"
               repoUrl: repo.html_url,
               branch: repo.default_branch,
-              maxFiles: 20,
+              maxFiles: undefined,
               oauthToken: accessToken
             });
           } catch (e) {
@@ -251,7 +254,7 @@ app.post("/api/github/connect", async (req, res) => {
   try {
     console.log(`[github/connect] Fetching repositories for ${githubUsername}...`);
     // Fetch public repos for the user natively
-    const reposRes = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=5`);
+    const reposRes = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=100`);
     if (!reposRes.ok) throw new Error(`GitHub API error: ${reposRes.statusText}`);
     const repos = await reposRes.json();
 
@@ -260,7 +263,7 @@ app.post("/api/github/connect", async (req, res) => {
       return;
     }
 
-    // In background, ingest up to 5 recently updated repos
+    // In background, ingest all fetched repos
     Promise.allSettled(repos.map(async (repo: any) => {
       try {
         console.log(`[github/connect] Queuing extraction for ${repo.html_url}`);
@@ -268,7 +271,7 @@ app.post("/api/github/connect", async (req, res) => {
           userId,
           repoUrl: repo.html_url,
           branch: repo.default_branch,
-          maxFiles: 20 // Process max 20 relevant files per repo
+          maxFiles: undefined
         });
       } catch (e) {
         console.error(`[github/connect] Error extracting ${repo.html_url}:`, e);
