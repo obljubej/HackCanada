@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { supabase, isSessionExpired, clearLoginTime, markLoginTime } from "@/lib/supabase"
 import { getNotifications } from "@/lib/db"
+import { getUsers } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { RoleProvider, useRole } from "@/lib/role-context"
 
@@ -45,6 +46,7 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
   const [unreadCount, setUnreadCount] = useState(0)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [cloneUsers, setCloneUsers] = useState<string[]>(["default-user"])
 
   useEffect(() => {
     setMounted(true)
@@ -93,6 +95,12 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
     }).catch(() => {})
   }, [userId, pathname])
 
+  useEffect(() => {
+    getUsers()
+      .then((users) => setCloneUsers(users.length > 0 ? users : ["default-user"]))
+      .catch(() => {})
+  }, [])
+
   const handleSignOut = async () => {
     clearLoginTime()
     await supabase.auth.signOut()
@@ -109,6 +117,7 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
         unreadCount={unreadCount}
         userName={userName}
         userEmail={userEmail}
+        cloneUsers={cloneUsers}
         handleSignOut={handleSignOut}
       >
         {children}
@@ -119,18 +128,21 @@ export default function DashboardLayoutClient({ children }: DashboardLayoutClien
 
 /** Inner component that can use the role context */
 function DashboardShell({
-  mobileOpen, setMobileOpen, unreadCount, userName, userEmail, handleSignOut, children,
+  mobileOpen, setMobileOpen, unreadCount, userName, userEmail, cloneUsers, handleSignOut, children,
 }: {
   mobileOpen: boolean
   setMobileOpen: (v: boolean) => void
   unreadCount: number
   userName: string
   userEmail: string
+  cloneUsers: string[]
   handleSignOut: () => void
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { isManager, effectiveRole, toggleRole, isOverridden } = useRole()
+  const selectedClone = searchParams.get("clone") || "default-user"
 
   const NAV = isManager ? MANAGER_NAV : EMPLOYEE_NAV
 
@@ -235,6 +247,30 @@ function DashboardShell({
             </svg>
             <span>Memory Chat</span>
           </Link>
+
+          {cloneUsers.length > 0 && (
+            <div className="space-y-0.5 pl-10 pr-2">
+              {cloneUsers.map((clone) => {
+                const isCloneActive = pathname === "/dashboard/chat" && selectedClone === clone
+                return (
+                  <Link
+                    key={clone}
+                    href={`/dashboard/chat?clone=${encodeURIComponent(clone)}`}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "block truncate rounded-md px-2 py-1.5 text-xs transition-colors",
+                      isCloneActive
+                        ? "bg-white/10 text-foreground"
+                        : "text-muted-foreground/80 hover:bg-white/5 hover:text-foreground"
+                    )}
+                    title={`Talk to ${clone}`}
+                  >
+                    {clone}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </nav>
 
         {/* Sidebar footer */}

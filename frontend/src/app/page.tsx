@@ -53,7 +53,7 @@ export default function AuthPage() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         markLoginTime()
-        window.location.href = "/dashboard/chat"
+        window.location.href = "/dashboard"
       }
     })
   }, [])
@@ -82,7 +82,7 @@ export default function AuthPage() {
         }
       }
       markLoginTime()
-      window.location.href = "/dashboard/chat"
+      window.location.href = "/dashboard"
     } catch (err: any) {
       setError(err.message || "Authentication failed")
       setLoading(false)
@@ -94,7 +94,7 @@ export default function AuthPage() {
     setLoading(true)
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard/chat` },
+      options: { redirectTo: `${window.location.origin}/dashboard` },
     })
     if (oauthError) { setError(oauthError.message); setLoading(false) }
   }
