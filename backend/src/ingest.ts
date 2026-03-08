@@ -39,6 +39,37 @@ export async function getKnownUsers(): Promise<string[]> {
   return cachedUsers;
 }
 
+export async function getProfileNameById(userId: string): Promise<string> {
+  if (userId === "default-user") return userId;
+
+  // Check if it's already a valid full_name in the profiles table
+  const { data: nameData, error: nameError } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("full_name", userId)
+    .single();
+
+  if (!nameError && nameData && nameData.full_name) {
+    return nameData.full_name;
+  }
+
+  // Not a valid full_name? It might be a UUID. Try looking up by id:
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+  if (isUUID) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .single();
+
+    if (!error && data && data.full_name) {
+      return data.full_name;
+    }
+  }
+
+  return userId; // Fallback to raw ID string if nothing matched
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 export function extractDriveFileId(url: string): string | null {
@@ -400,6 +431,17 @@ export async function ingestPersonalClaim(params: {
     memoryType,
     content: claim,
   };
+}
+
+export async function getPersonalClaims(userId: string) {
+  const { data, error } = await supabase
+    .from("memory_items")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("metadata->>source", "self-claim");
+
+  if (error) throw error;
+  return data;
 }
 
 async function ingestTextSource(params: {

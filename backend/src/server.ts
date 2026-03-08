@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import { createOAuth2Client } from "./config.js";
-import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, ingestGithubCommit, ingestPersonalClaim, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
+import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, ingestGithubCommit, ingestPersonalClaim, getPersonalClaims, getProfileNameById, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
 import { meetingsRouter } from "./meetings.js";
@@ -83,11 +83,12 @@ apiRouter.post("/ingest", async (req, res) => {
     res.status(401).json({ error: "Not connected to Google. Visit /oauth/login first." });
     return;
   }
-  const { driveUrl, userId = "default-user" } = req.body;
+  let { driveUrl, userId = "default-user" } = req.body;
   if (!driveUrl) {
     res.status(400).json({ error: "driveUrl is required" });
     return;
   }
+  userId = await getProfileNameById(userId);
   try {
     if (isDriveFolderUrl(driveUrl)) {
       const result = await ingestDriveFolder({ userId, folderUrl: driveUrl, accessToken: storedTokens.access_token });
@@ -103,11 +104,12 @@ apiRouter.post("/ingest", async (req, res) => {
 });
 
 app.post("/ingest/github", async (req, res) => {
-  const { repoUrl, userId = "default-user", branch, maxFiles } = req.body;
+  let { repoUrl, userId = "default-user", branch, maxFiles } = req.body;
   if (!repoUrl) {
     res.status(400).json({ error: "repoUrl is required" });
     return;
   }
+  userId = await getProfileNameById(userId);
 
   try {
     const result = await ingestGithubRepo({
@@ -303,8 +305,9 @@ app.post("/api/github/webhook", async (req, res) => {
 // ── Search route ─────────────────────────────────────────────────────
 
 app.post("/search", async (req, res) => {
-  const { query, userId = "default-user" } = req.body;
+  let { query, userId = "default-user" } = req.body;
   if (!query) { res.status(400).json({ error: "query is required" }); return; }
+  userId = await getProfileNameById(userId);
   try {
     const results = await searchMemories(userId, query);
     res.json({ results });
@@ -315,8 +318,9 @@ app.post("/search", async (req, res) => {
 });
 
 apiRouter.post("/ask", async (req, res) => {
-  const { question, userId = "default-user", threadId } = req.body;
+  let { question, userId = "default-user", threadId } = req.body;
   if (!question) { res.status(400).json({ error: "question is required" }); return; }
+  userId = await getProfileNameById(userId);
   try {
     const result = await askQuestion(userId, question, threadId);
     res.json(result);
@@ -326,18 +330,20 @@ apiRouter.post("/ask", async (req, res) => {
   }
 });
 
-apiRouter.post("/ask/reset", (req, res) => {
-  const { userId = "default-user" } = req.body;
+apiRouter.post("/ask/reset", async (req, res) => {
+  let { userId = "default-user" } = req.body;
+  userId = await getProfileNameById(userId);
   resetThread(userId);
   res.json({ success: true });
 });
 
 apiRouter.post("/claims", async (req, res) => {
-  const { userId = "default-user", claim, claimType } = req.body;
+  let { userId = "default-user", claim, claimType } = req.body;
   if (!claim || typeof claim !== "string") {
     res.status(400).json({ error: "claim is required" });
     return;
   }
+  userId = await getProfileNameById(userId);
 
   try {
     const result = await ingestPersonalClaim({
@@ -348,6 +354,18 @@ apiRouter.post("/claims", async (req, res) => {
     res.json({ success: true, ...result });
   } catch (err: any) {
     console.error("[claims] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.get("/claims", async (req, res) => {
+  let userId = (req.query.userId as string) || "default-user";
+  userId = await getProfileNameById(userId);
+  try {
+    const claims = await getPersonalClaims(userId);
+    res.json({ success: true, claims });
+  } catch (err: any) {
+    console.error("[claims] GET Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
