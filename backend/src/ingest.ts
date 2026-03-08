@@ -224,6 +224,7 @@ Extract memories into exactly these categories:
 - preference
 - person
 - summary
+- skill
 
 Scoring rules:
 - weight: future usefulness for retrieval, from 0.0 to 1.0
@@ -593,4 +594,38 @@ export async function ingestDriveFolder(params: {
     results,
     errors,
   };
+}
+
+export async function ingestGithubCommit(params: {
+  userId: string;
+  owner: string;
+  repo: string;
+  commitId: string;
+}) {
+  console.log(`[ingest/github] Fetching commit ${params.commitId} from ${params.owner}/${params.repo}...`);
+  const data = await githubRequest(`/repos/${params.owner}/${params.repo}/commits/${params.commitId}`);
+  if (!data || !data.files) return;
+  
+  let commitText = `GitHub Commit by ${params.userId} in ${params.owner}/${params.repo} (Commit: ${params.commitId})\n`;
+  commitText += `Message: ${data.commit?.message || "No message"}\n\n`;
+  
+  let processed = 0;
+  for (const file of data.files) {
+    if (processed >= 20) break;
+    if (!file.patch || file.patch.length > 200000) continue;
+    commitText += `File: ${file.filename}\nPatch:\n${file.patch}\n\n`;
+    processed++;
+  }
+
+  console.log(`[ingest/github] Parsing commit diffs via Backboard Memory Pipeline...`);
+  await ingestTextSource({
+    userId: params.userId,
+    source: "gdrive",
+    sourceFileId: params.commitId,
+    sourceUrl: data.html_url || `https://github.com/${params.owner}/${params.repo}/commit/${params.commitId}`,
+    title: `Commit ${params.commitId.slice(0, 7)} in ${params.repo}`,
+    mimeType: "text/plain",
+    text: commitText,
+    metadata: { owner: params.owner, repo: params.repo, commitId: params.commitId }
+  });
 }
