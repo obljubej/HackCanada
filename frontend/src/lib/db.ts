@@ -15,10 +15,30 @@ export async function getEmployees(): Promise<Employee[]> {
     .from("employees")
     .select("*")
     .order("name")
+
   if (error) {
-    console.warn("[db] getEmployees:", error.message)
-    return []
+    console.warn("[db] getEmployees: employees table not found, falling back to profiles", error.message)
+    // Fallback: read from profiles table (what actually exists in Supabase)
+    const { data: profiles, error: pErr } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("full_name")
+    if (pErr) {
+      console.warn("[db] getEmployees fallback:", pErr.message)
+      return []
+    }
+    return (profiles ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.full_name ?? p.email ?? "Unknown",
+      email: p.email,
+      role: p.role ?? "Team Member",
+      department: p.department ?? null,
+      skills: p.skills ?? [],
+      availability: p.availability ?? true,
+      user_role: p.user_role ?? "employee",
+    }))
   }
+
   return data ?? []
 }
 

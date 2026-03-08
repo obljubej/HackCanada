@@ -1,0 +1,293 @@
+{
+  "auth": {
+    "users": [
+      {
+        "id": "73a20c97-4703-4115-b262-e4585742201c",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "guptar76@mcmaster.ca",
+        "email_confirmed_at": "2026-03-07T22:38:37.440438Z",
+        "phone": "",
+        "confirmed_at": "2026-03-07T22:38:37.440438Z",
+        "last_sign_in_at": "2026-03-07T22:38:37.444769Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "guptar76@mcmaster.ca",
+          "email_verified": true,
+          "full_name": "John Placebo",
+          "phone_verified": false,
+          "sub": "73a20c97-4703-4115-b262-e4585742201c"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T22:38:37.418236Z",
+        "updated_at": "2026-03-07T23:45:10.192384Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "9979dbc9-bcb0-4983-9bbe-b250743c52a4",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "potatojosh123@gmail.com",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T22:34:25.167141Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "potatojosh123@gmail.com",
+          "email_verified": false,
+          "full_name": "testing",
+          "phone_verified": false,
+          "sub": "9979dbc9-bcb0-4983-9bbe-b250743c52a4"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T22:34:25.150407Z",
+        "updated_at": "2026-03-07T22:34:26.16016Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "69de92f9-48ed-4315-b1d0-408bd23f3346",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "obljubej@mcmaster.ca",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T22:33:43.939216Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "obljubej@mcmaster.ca",
+          "email_verified": false,
+          "full_name": "urmom123",
+          "phone_verified": false,
+          "sub": "69de92f9-48ed-4315-b1d0-408bd23f3346"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T22:28:09.026976Z",
+        "updated_at": "2026-03-07T22:33:45.165934Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "4cc10622-4131-4311-a636-e3f4be82c4b5",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "abc.cba@gmail.com",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T22:15:41.188995Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "abc.cba@gmail.com",
+          "email_verified": false,
+          "full_name": "Johnny ABC",
+          "phone_verified": false,
+          "sub": "4cc10622-4131-4311-a636-e3f4be82c4b5"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T22:15:41.150106Z",
+        "updated_at": "2026-03-07T22:15:42.310906Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "848327ae-a218-4935-a19a-2529f9c7aeff",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "dummy@outlook.com",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T22:24:05.187492Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "dummy@outlook.com",
+          "email_verified": false,
+          "full_name": "Ratish Gupta",
+          "phone_verified": false,
+          "sub": "848327ae-a218-4935-a19a-2529f9c7aeff"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T18:59:53.3347Z",
+        "updated_at": "2026-03-07T22:24:06.215997Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "53cd1036-dd61-4ad3-bd43-5f5979491be2",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "ratishgupta2005@gmail.com",
+        "email_confirmed_at": "2026-03-07T22:18:32.223495Z",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T22:17:21.998168Z",
+        "confirmed_at": "2026-03-07T22:18:32.223495Z",
+        "last_sign_in_at": "2026-03-07T22:18:32.228917Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "ratishgupta2005@gmail.com",
+          "email_verified": true,
+          "full_name": "Ratish",
+          "phone_verified": false,
+          "sub": "53cd1036-dd61-4ad3-bd43-5f5979491be2"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T15:56:08.424454Z",
+        "updated_at": "2026-03-07T22:18:32.259948Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "dd72ebd0-7aa3-484a-b3a8-ab55f9b7a285",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "aryan20@gmail.com",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T15:40:33.594343Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "aryan20@gmail.com",
+          "email_verified": false,
+          "full_name": "aryan",
+          "phone_verified": false,
+          "sub": "dd72ebd0-7aa3-484a-b3a8-ab55f9b7a285"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T15:40:33.484697Z",
+        "updated_at": "2026-03-07T15:40:34.841039Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "c099340b-22c9-42eb-b3c1-134bef717277",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "aryandes20@gmail.com",
+        "email_confirmed_at": "2026-03-07T13:54:21.885422Z",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T13:54:06.08647Z",
+        "confirmed_at": "2026-03-07T13:54:21.885422Z",
+        "last_sign_in_at": "2026-03-08T04:24:30.809444Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "aryandes20@gmail.com",
+          "email_verified": true,
+          "full_name": "Aryan Desai",
+          "phone_verified": false,
+          "sub": "c099340b-22c9-42eb-b3c1-134bef717277"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T13:54:06.077579Z",
+        "updated_at": "2026-03-08T04:29:57.594497Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "fd1c5904-f425-4414-9860-d6e3f1d83c0b",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "aryandes30@gmail.com",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T13:52:33.578959Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "aryandes30@gmail.com",
+          "email_verified": false,
+          "full_name": "aryan",
+          "phone_verified": false,
+          "sub": "fd1c5904-f425-4414-9860-d6e3f1d83c0b"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T13:52:33.521651Z",
+        "updated_at": "2026-03-07T13:52:34.699138Z",
+        "is_anonymous": false
+      },
+      {
+        "id": "2327f292-1d8c-41b5-b2c2-008e3483088c",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": "joshuaobljubekthomas@gmail.com",
+        "email_confirmed_at": "2026-03-07T10:41:13.003682Z",
+        "phone": "",
+        "confirmation_sent_at": "2026-03-07T10:40:53.677876Z",
+        "confirmed_at": "2026-03-07T10:41:13.003682Z",
+        "last_sign_in_at": "2026-03-07T10:41:13.008597Z",
+        "app_metadata": {
+          "provider": "email",
+          "providers": [
+            "email"
+          ]
+        },
+        "user_metadata": {
+          "email": "joshuaobljubekthomas@gmail.com",
+          "email_verified": true,
+          "full_name": "Joshua Obljubek",
+          "phone_verified": false,
+          "sub": "2327f292-1d8c-41b5-b2c2-008e3483088c"
+        },
+        "identities": null,
+        "created_at": "2026-03-07T10:40:53.651413Z",
+        "updated_at": "2026-03-07T15:08:19.48921Z",
+        "is_anonymous": false
+      }
+    ],
+    "aud": "authenticated",
+    "nextPage": null,
+    "lastPage": 1,
+    "total": 10
+  },
+  "profiles": [
+    {
+      "id": "2327f292-1d8c-41b5-b2c2-008e3483088c",
+      "email": "joshuaobljubekthomas@gmail.com",
+      "full_name": "Joshua Obljubek",
+      "avatar_url": null,
+      "created_at": "2026-03-07T10:40:53.650987+00:00",
+      "updated_at": "2026-03-07T10:40:53.650987+00:00",
+      "manager_email": null,
+      "Manager name": null
+    },
+    {
+      "id": "c099340b-22c9-42eb-b3c1-134bef717277",
+      "email": "aryandes20@gmail.com",
+      "full_name": "Aryan Desai",
+      "avatar_url": null,
+      "created_at": "2026-03-07T16:38:36.095218+00:00",
+      "updated_at": "2026-03-07T16:38:36.095218+00:00",
+      "manager_email": null,
+      "Manager name": null
+    }
+  ]
+}

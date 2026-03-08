@@ -11,6 +11,7 @@ import { meetingsRouter } from "./meetings.js";
 import { voiceRouter } from "./voice.js";
 import { aiRouter } from "./ai-endpoints.js";
 import organizationRouter from "./organization.js";
+import projectsRouter from "./projects.js";
 
 const app = express();
 app.use(express.json());
@@ -66,7 +67,12 @@ const apiRouter = express.Router();
 apiRouter.use("/meetings", meetingsRouter);
 apiRouter.use("/voice", voiceRouter);
 apiRouter.use("/ai", aiRouter);
-apiRouter.use("/organization", organizationRouter);
+
+// Mount organization + project routes at root AND under /api for both access patterns
+app.use(organizationRouter);
+app.use(projectsRouter);
+apiRouter.use(organizationRouter);
+apiRouter.use(projectsRouter);
 
 apiRouter.get("/oauth/status", (_req, res) => {
   res.json({ connected: !!storedTokens });

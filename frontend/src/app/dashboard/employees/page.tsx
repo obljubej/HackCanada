@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { getEmployees, createEmployee, updateEmployee, deleteEmployee } from "@/lib/db"
+import { organizationAPI } from "@/lib/api"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -305,6 +306,7 @@ export default function EmployeesPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true)
+      // Use direct Supabase via lib/db (frontend anon key) which has correct RLS access
       setEmployees(await getEmployees())
     } catch (err: any) {
       setError(err.message)

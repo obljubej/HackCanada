@@ -160,10 +160,16 @@ export const projectsAPI = {
     apiPut(`/projects/${id}`, body),
   assignEmployee: (projectId: string, body: Record<string, unknown>) =>
     apiPost(`/projects/${projectId}/assign`, body),
+  deleteAssignment: (projectId: string, employeeId: string) =>
+    apiDelete(`/projects/${projectId}/assign/${employeeId}`),
   getTeam: (projectId: string) => apiGet(`/projects/${projectId}/team`),
   getTasks: (projectId: string) => apiGet(`/projects/${projectId}/tasks`),
   createTask: (projectId: string, body: Record<string, unknown>) =>
     apiPost(`/projects/${projectId}/tasks`, body),
+  updateTask: (taskId: string, body: Record<string, unknown>) =>
+    apiPut(`/tasks/${taskId}`, body),
+  rankEmployees: (projectId: string, autoAssign = false) =>
+    apiPost(`/projects/${projectId}/rank-employees`, { auto_assign: autoAssign }),
 };
 export async function connectGithubAccount(githubUsername: string, userId: string) {
   return apiPost("/github/connect", { githubUsername, userId });

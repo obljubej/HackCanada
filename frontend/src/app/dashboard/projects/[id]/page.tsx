@@ -7,6 +7,7 @@ import {
   getProject, getProjectAssignments, getProjectTasks, getProjectMeetings,
   createTask, updateTaskStatus, deleteTask, createMeeting, updateProject
 } from "@/lib/db"
+import { projectsAPI } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
@@ -51,6 +52,8 @@ export default function ProjectWorkspacePage() {
   const [taskPriority, setTaskPriority] = useState<Task["priority"]>("medium")
   const [savingTask, setSavingTask] = useState(false)
 
+  // AI ranking
+  const [ranking, setRanking] = useState(false)
   // Meeting modal
   const [showMeetingModal, setShowMeetingModal] = useState(false)
   const [meetTitle, setMeetTitle] = useState("")
@@ -60,15 +63,38 @@ export default function ProjectWorkspacePage() {
   const load = useCallback(async () => {
     if (!id) return
     try {
-      const [proj, assgn, ts, ms] = await Promise.all([
+      const [proj, team, ts, ms] = await Promise.all([
         getProject(id),
-        getProjectAssignments(id),
-        getProjectTasks(id),
+        projectsAPI.getTeam(id).then((r: any) => r.team ?? []).catch(() => getProjectAssignments(id)),
+        projectsAPI.getTasks(id).then((r: any) => r.tasks ?? []).catch(() => getProjectTasks(id)),
         getProjectMeetings(id),
       ])
       setProject(proj)
-      setAssignments(assgn)
-      setTasks(ts)
+      // Normalise team members from API shape to ProjectAssignment shape
+      setAssignments(team.map((t: any) => ({
+        id: t.id,
+        project_id: id,
+        employee_id: t.employees?.id ?? t.employee_id,
+        role: t.role_in_project ?? t.role,
+        employee: t.employees ? {
+          id: t.employees.id,
+          name: t.employees.full_name ?? t.employees.name,
+          email: t.employees.email,
+          role: t.employees.role,
+          skills: (t.employees.employee_skills ?? []).map((es: any) => es.skills?.name).filter(Boolean),
+          availability: true,
+        } : t.employee,
+      })))
+      setTasks(ts.map((t: any) => ({
+        id: t.id,
+        project_id: id,
+        title: t.title,
+        status: t.status,
+        priority: t.priority ?? "medium",
+        assigned_to: t.assigned_to,
+        due_date: t.due_date,
+        employee: t.employees ? { name: t.employees.full_name ?? t.employees.name } : undefined,
+      })))
       setMeetings(ms)
     } catch (e: any) {
       setError(e.message)
@@ -77,11 +103,28 @@ export default function ProjectWorkspacePage() {
     }
   }, [id])
 
+  const handleRankTeam = async () => {
+    if (!id) return
+    setRanking(true)
+    try {
+      await projectsAPI.rankEmployees(id, true)
+      await load()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setRanking(false)
+    }
+  }
+
+
   useEffect(() => { load() }, [load])
 
   const handleStatusChange = async (task: Task, newStatus: Task["status"]) => {
     setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, status: newStatus } : t))
-    await updateTaskStatus(task.id, newStatus).catch(() => {})
+    // Try backend API first, fall back to direct Supabase
+    await projectsAPI.updateTask(task.id, { status: newStatus })
+      .catch(() => updateTaskStatus(task.id, newStatus))
+      .catch(() => {})
   }
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -259,7 +302,21 @@ export default function ProjectWorkspacePage() {
         <div className="space-y-6">
           {/* Team */}
           <div className="space-y-3">
-            <h2 className="text-base font-semibold">Team</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold">Team</h2>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRankTeam}
+                isLoading={ranking}
+                title="AI auto-assigns best available employees for this project"
+              >
+                <svg className="mr-1.5 h-3.5 w-3.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+                {ranking ? "Ranking…" : "AI Rank Team"}
+              </Button>
+            </div>
             <Card>
               <CardContent className="py-4 space-y-3">
                 {assignments.length === 0 ? (
