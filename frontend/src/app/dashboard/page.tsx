@@ -5,6 +5,7 @@ import Link from "next/link"
 import { getProjects, getEmployees, getNotifications } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { useRole } from "@/lib/role-context"
 import type { Project, Employee, Notification } from "@/lib/types"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -431,11 +432,11 @@ function EmployeeDashboard({ projects, notifications }: {
 }
 
 export default function DashboardPage() {
+  const { isManager } = useRole()
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
-  const [userRole, setUserRole] = useState<string>("employee")
 
   useEffect(() => {
     async function load() {
@@ -443,36 +444,14 @@ export default function DashboardPage() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) return
 
-        // Fetch role
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("user_role")
-          .eq("id", session.user.id)
-          .single()
-
-        const role = profile?.user_role || "employee"
-        setUserRole(role)
-
-        const isManager = role === "manager" || role === "ceo" || role === "cto"
-
-        if (isManager) {
-          const [projs, emps, ns] = await Promise.all([
-            getProjects(),
-            getEmployees(),
-            getNotifications(session.user.id).catch(() => [])
-          ])
-          setProjects(projs)
-          setEmployees(emps)
-          setNotifications(ns)
-        } else {
-          // Employees see only their own assigned projects
-          const [projs, ns] = await Promise.all([
-            getProjects().catch(() => []),  // TODO: filter by assigned
-            getNotifications(session.user.id).catch(() => [])
-          ])
-          setProjects(projs)
-          setNotifications(ns)
-        }
+        const [projs, emps, ns] = await Promise.all([
+          getProjects().catch(() => []),
+          getEmployees().catch(() => []),
+          getNotifications(session.user.id).catch(() => [])
+        ])
+        setProjects(projs)
+        setEmployees(emps)
+        setNotifications(ns)
       } catch {
         // silently fail, tables may not exist yet
       } finally {
@@ -492,8 +471,6 @@ export default function DashboardPage() {
       </div>
     )
   }
-
-  const isManager = userRole === "manager" || userRole === "ceo" || userRole === "cto"
 
   if (isManager) {
     return <ManagerDashboard projects={projects} employees={employees} notifications={notifications} />
