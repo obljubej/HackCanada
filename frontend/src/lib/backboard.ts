@@ -20,12 +20,12 @@ export async function analyzeProject(
   projectText: string
 ): Promise<BackboardAnalysis> {
   try {
-    const res = await fetch(`${BACKBOARD_URL}/analyze`, {
+    const res = await fetch(`${BACKBOARD_URL}/api/ai/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: projectText }),
     })
-    if (!res.ok) throw new Error("Backboard /analyze failed")
+    if (!res.ok) throw new Error("Backboard /api/ai/analyze failed")
     return res.json()
   } catch {
     // Fallback: generate mock analysis from keywords
@@ -40,12 +40,12 @@ export async function rankEmployees(
   employees: Employee[]
 ): Promise<BackboardRanking[]> {
   try {
-    const res = await fetch(`${BACKBOARD_URL}/rank`, {
+    const res = await fetch(`${BACKBOARD_URL}/api/ai/rank`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requirements: analysis.required_roles, employees }),
     })
-    if (!res.ok) throw new Error("Backboard /rank failed")
+    if (!res.ok) throw new Error("Backboard /api/ai/rank failed")
     return res.json()
   } catch {
     // Fallback: score employees locally by skill overlap

@@ -1,5 +1,5 @@
 import express from "express";
-import { supabase } from "./config.js";
+import { supabase, ai } from "./config.js";
 import { askQuestion, resetThread } from "./ask.js";
 
 export const aiRouter = express.Router();
@@ -214,3 +214,177 @@ aiRouter.post("/task-reminder", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── POST /api/ai/analyze ──────────────────────────────────────────────────
+aiRouter.post("/analyze", async (req, res) => {
+  const { text } = req.body;
+  if (!text) {
+    res.status(400).json({ error: "text is required" });
+    return;
+  }
+
+  try {
+    const prompt = `You are an expert technical project manager. Analyze the following project description and determine the required roles, team size, skills, and complexity.
+
+PROJECT DESCRIPTION:
+${text}
+
+Respond ONLY with valid JSON in this exact format, with NO markdown formatting:
+{
+  "summary": "A 1-2 sentence summary of the project",
+  "team_size": 4,
+  "complexity": "low" | "medium" | "high",
+  "required_roles": [
+    {
+      "role": "Frontend Engineer",
+      "count": 2,
+      "skills": ["React", "TypeScript", "Tailwind"]
+    }
+  ]
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: prompt,
+    });
+
+    const responseText = response.text || "";
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+
+    if (!result) {
+      throw new Error("Failed to parse AI response into JSON");
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error("[ai/analyze]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Helper: compute employee skills from memories ───────────────────────
+async function getEmployeeSkillsFromMemories(userId: string): Promise<string[]> {
+  try {
+    const { data: memories } = await supabase
+      .from("memory_items")
+      .select("content, metadata")
+      .eq("user_id", userId)
+      .or("memory_type.eq.skill,metadata->>original_memory_type.eq.skill")
+      .limit(20);
+
+    if (!memories || memories.length === 0) return [];
+
+    const skillContent = memories.map(m => m.content).join("\n");
+    const prompt = `Based on these memory fragments about an employee, extract a clean list of their top technical skills and expertise.
+
+MEMORIES:
+${skillContent}
+
+Respond ONLY with a JSON array of skill names (strings).`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: prompt,
+    });
+
+    const responseText = response.text || "";
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    return [];
+  } catch (err) {
+    console.warn(`[getEmployeeSkillsFromMemories] Failed for ${userId}:`, err);
+    return [];
+  }
+}
+
+// ── POST /api/ai/rank ────────────────────────────────────────────────────
+aiRouter.post("/rank", async (req, res) => {
+  const { requirements, employees } = req.body;
+  if (!requirements || !employees || !Array.isArray(employees)) {
+    res.status(400).json({ error: "requirements and employees array are required" });
+    return;
+  }
+
+  try {
+    // ── Proper Skill Computation ──
+    const employeesWithComputedSkills = await Promise.all(
+      employees.map(async (emp: any) => {
+        const computedSkills = await getEmployeeSkillsFromMemories(emp.id);
+        return {
+          id: emp.id,
+          name: emp.name,
+          role: emp.role,
+          skills: computedSkills.length > 0 ? computedSkills : (emp.skills || []),
+          availability: emp.availability ?? true
+        };
+      })
+    );
+
+    const prompt = `You are an expert HR and project matcher for RelAI. 
+You MUST rank candidates for each role based ONLY on the provided list of employees.
+
+REQUIRED ROLES:
+${JSON.stringify(requirements, null, 2)}
+
+AVAILABLE EMPLOYEES:
+${JSON.stringify(employeesWithComputedSkills, null, 2)}
+
+For each role, suggest the best candidates. 
+IMPORTANT: 
+1. Use the EXACT "id" and "name" from the AVAILABLE EMPLOYEES list. 
+2. Do NOT invent new IDs or names.
+3. Calculate a match_score (0-100), matched_skills, and missing_skills.
+
+Respond ONLY with a JSON array in this format:
+[
+  {
+    "role": "Role Name",
+    "candidates": [
+      {
+        "employee_id": "EXACT_ID_FROM_LIST",
+        "employee_name": "EXACT_NAME_FROM_LIST",
+        "match_score": 95,
+        "matched_skills": ["Skill1"],
+        "missing_skills": ["Skill2"],
+        "available": true
+      }
+    ]
+  }
+]`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: prompt,
+    });
+
+    const responseText = response.text || "";
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    let result: any[] = [];
+    if (jsonMatch) {
+      try {
+        result = JSON.parse(jsonMatch[0]);
+        
+        // ── Validation & Mapping ──
+        // Ensure every candidate has a VALID ID from our original list
+        result.forEach((roleGroup: any) => {
+          roleGroup.candidates.forEach((cand: any) => {
+            const original = employeesWithComputedSkills.find(
+              e => e.id === cand.employee_id || e.name.toLowerCase() === cand.employee_name?.toLowerCase()
+            );
+            if (original) {
+              cand.employee_id = original.id;
+              cand.employee_name = original.name;
+            }
+          });
+        });
+      } catch(e) { /* fallback */ }
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    console.error("[ai/rank]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
