@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import express from "express";
 import cors from "cors";
 import { createOAuth2Client } from "./config.js";
-import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
+import { ingestDriveLink, ingestDriveFolder, ingestGithubRepo, ingestGithubCommit, isDriveFolderUrl, getKnownUsers } from "./ingest.js";
 import { searchMemories } from "./search.js";
 import { askQuestion, resetThread } from "./ask.js";
 import { meetingsRouter } from "./meetings.js";
@@ -114,6 +114,85 @@ app.post("/ingest/github", async (req, res) => {
   } catch (err: any) {
     console.error("[ingest/github] Error:", err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GitHub Account Connection (Automatic Repos Fetch) ─────────────────
+
+app.post("/api/github/connect", async (req, res) => {
+  const { githubUsername, userId = "default-user" } = req.body;
+  if (!githubUsername) {
+    res.status(400).json({ error: "githubUsername is required" });
+    return;
+  }
+
+  try {
+    console.log(`[github/connect] Fetching repositories for ${githubUsername}...`);
+    // Fetch public repos for the user natively
+    const reposRes = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=5`);
+    if (!reposRes.ok) throw new Error(`GitHub API error: ${reposRes.statusText}`);
+    const repos = await reposRes.json();
+
+    if (!Array.isArray(repos) || repos.length === 0) {
+      res.json({ success: true, message: "No public repositories found.", ingested: 0 });
+      return;
+    }
+
+    // In background, ingest up to 5 recently updated repos
+    Promise.allSettled(repos.map(async (repo: any) => {
+      try {
+        console.log(`[github/connect] Queuing extraction for ${repo.html_url}`);
+        await ingestGithubRepo({
+          userId,
+          repoUrl: repo.html_url,
+          branch: repo.default_branch,
+          maxFiles: 20 // Process max 20 relevant files per repo
+        });
+      } catch (e) {
+        console.error(`[github/connect] Error extracting ${repo.html_url}:`, e);
+      }
+    }));
+
+    res.json({ 
+      success: true, 
+      message: `Successfully connected! Queued ${repos.length} repositories for Backboard AI skill extraction.`,
+      reposCount: repos.length
+    });
+  } catch (err: any) {
+    console.error("[github/connect] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GitHub Push Webhook (Automatic Skill Extraction) ─────────────────
+
+app.post("/api/github/webhook", async (req, res) => {
+  const payload = req.body;
+  
+  // Acknowledge receipt immediately to avoid GitHub timeout
+  res.status(200).send("Webhook received");
+
+  if (!payload.commits || !payload.repository) return;
+
+  const commits = payload.commits;
+  const repo = payload.repository.name;
+  const owner = payload.repository.owner.login;
+
+  // Assuming pusher/sender is the mapped user. In production, map github username -> user_id
+  const githubUsername = payload.sender?.login || "default-user";
+  const userId = githubUsername; // Basic dummy map, normally a lookup to profiles table
+
+  try {
+    for (const commit of commits) {
+      await ingestGithubCommit({
+         userId,
+         owner,
+         repo,
+         commitId: commit.id
+      });
+    }
+  } catch (err) {
+    console.error("[github/webhook] Extraction Error:", err);
   }
 });
 

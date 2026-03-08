@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { supabase, isSessionExpired, clearLoginTime, markLoginTime } from "@/lib/supabase"
-import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, ingestGithubRepo, resetChat, getUsers } from "@/lib/api"
+import { askQuestion, getOAuthStatus, getOAuthLoginUrl, ingestDriveUrl, ingestGithubRepo, connectGithubAccount, resetChat, getUsers } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
@@ -46,10 +46,12 @@ export default function ChatPage() {
   const [showIngest, setShowIngest] = useState(false)
   const [driveUrl, setDriveUrl] = useState("")
   const [githubUrl, setGithubUrl] = useState("")
+  const [githubUsername, setGithubUsername] = useState("")
   const [ingesting, setIngesting] = useState(false)
   const [ingestResult, setIngestResult] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [memoryUserId, setMemoryUserId] = useState("default-user")
   const [availableUsers, setAvailableUsers] = useState<string[]>(["default-user"])
+  const [skills, setSkills] = useState<{content: string, weight: number}[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Check auth + session expiry on mount
@@ -98,6 +100,26 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, loading])
+
+  useEffect(() => {
+    const fetchSkills = async () => {
+      if (!memoryUserId) return
+      const { data, error } = await supabase
+        .from("memory_items")
+        .select("content, weight")
+        .eq("memory_type", "skill")
+        .eq("user_id", memoryUserId)
+        .order("weight", { ascending: false })
+        .limit(10)
+      
+      if (!error && data) {
+        setSkills(data)
+      } else {
+        setSkills([])
+      }
+    }
+    fetchSkills()
+  }, [memoryUserId])
 
   const handleSignOut = async () => {
     clearLoginTime()
@@ -183,6 +205,23 @@ export default function ChatPage() {
       setGithubUrl("")
     } catch (err: any) {
       setIngestResult({ type: "error", text: err.message || "Failed to ingest GitHub repository" })
+    }
+    setIngesting(false)
+  }
+
+  const handleGithubConnect = async () => {
+    if (!githubUsername.trim() || !user) return
+    setIngesting(true)
+    setIngestResult(null)
+    try {
+      const data = await connectGithubAccount(githubUsername.trim(), memoryUserId)
+      setIngestResult({
+        type: "success",
+        text: `Connected! Extracted skills from ${data.reposCount} active GitHub repositories natively.`,
+      })
+      setGithubUsername("")
+    } catch (err: any) {
+      setIngestResult({ type: "error", text: err.message || "Failed to connect GitHub account" })
     }
     setIngesting(false)
   }
@@ -341,6 +380,26 @@ export default function ChatPage() {
                 </Button>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+              <div className="flex-1 w-full space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Connect GitHub Account</label>
+                <Input
+                  type="text"
+                  value={githubUsername}
+                  onChange={(e) => setGithubUsername(e.target.value)}
+                  placeholder="Enter your GitHub Username (e.g. a1desai)"
+                  className="w-full bg-background"
+                  onKeyDown={(e) => e.key === "Enter" && handleGithubConnect()}
+                  disabled={ingesting}
+                />
+              </div>
+              <div className="pt-0 sm:pt-5 w-full sm:w-auto flex flex-col gap-2">
+                <Button onClick={handleGithubConnect} disabled={ingesting || !githubUsername.trim()} isLoading={ingesting} className="w-full sm:w-auto bg-slate-900 border border-slate-700 hover:bg-slate-800 text-white">
+                  {ingesting ? "Extracting Skills..." : "Connect GitHub"}
+                </Button>
+              </div>
+            </div>
           </div>
           {ingestResult && (
              <div className="mt-3">
@@ -355,6 +414,24 @@ export default function ChatPage() {
       {/* Chat Timeline */}
       <main className="flex-1 overflow-y-auto px-4 py-8">
         <div className="mx-auto max-w-4xl space-y-8 flex flex-col pb-4">
+          {skills.length > 0 && (
+            <div className="flex flex-col gap-2 mb-2 p-4 rounded-xl border border-border bg-muted/20">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                AI Skill Context Active
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                    {skill.content}
+                    <span className="text-[10px] opacity-70" title="Skill Weight">{(skill.weight * 100).toFixed(0)}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {messages.map((msg, i) => (
             <div
               key={i}

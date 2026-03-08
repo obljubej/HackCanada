@@ -155,6 +155,9 @@ export const projectsAPI = {
   createTask: (projectId: string, body: Record<string, unknown>) =>
     apiPost(`/projects/${projectId}/tasks`, body),
 };
+export async function connectGithubAccount(githubUsername: string, userId: string) {
+  return apiPost("/github/connect", { githubUsername, userId });
+}
 
 export const notificationsAPI = {
   getNotifications: (userId: string) =>
