@@ -133,9 +133,13 @@ app.get("/api/github/oauth/login", (req, res) => {
     res.status(500).send("GitHub OAuth is not configured. Missing GITHUB_CLIENT_ID.");
     return;
   }
-  
-  const redirectUri = encodeURIComponent("http://localhost:5000/api/github/oauth/callback");
-  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo`;
+
+  // Carry the caller's Supabase user ID through the OAuth round-trip via the `state` param.
+  const supabaseUserId = (req.query.supabase_user_id as string) || "default-user";
+  const state = Buffer.from(JSON.stringify({ supabaseUserId })).toString("base64url");
+
+  const redirectUri = encodeURIComponent("http://localhost:5001/api/github/oauth/callback");
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo&state=${state}&prompt=consent`;
   
   res.redirect(url);
 });
@@ -146,9 +150,22 @@ app.get("/api/github/oauth/callback", async (req, res) => {
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
 
   if (!code || !clientId || !clientSecret) {
-    res.status(400).send("Invalid OAuth callback parameters or missing enviroment configuration.");
+    res.status(400).send("Invalid OAuth callback parameters or missing environment configuration.");
     return;
   }
+
+  // Recover the Supabase user ID that was encoded into the OAuth `state` param.
+  const stateRaw = req.query.state as string | undefined;
+  let userId = "default-user";
+  if (stateRaw) {
+    try {
+      const parsed = JSON.parse(Buffer.from(stateRaw, "base64url").toString());
+      userId = parsed.supabaseUserId || "default-user";
+    } catch {
+      console.warn("[github/oauth] Failed to parse state param, falling back to default-user");
+    }
+  }
+  console.log(`[github/oauth] Ingesting repos for Supabase userId: ${userId}`);
 
   try {
     // 1. Exchange code for access token
@@ -172,7 +189,7 @@ app.get("/api/github/oauth/callback", async (req, res) => {
       throw new Error("Failed to retrieve access token from GitHub.");
     }
 
-    // 2. Fetch authenticated user profile
+    // 2. Fetch authenticated GitHub user
     const userRes = await fetch("https://api.github.com/user", {
       headers: {
         "Authorization": `Bearer ${accessToken}`,
@@ -187,35 +204,34 @@ app.get("/api/github/oauth/callback", async (req, res) => {
       throw new Error("Failed to retrieve username from GitHub.");
     }
     
-    console.log(`[github/oauth] Successfully authenticated user: ${githubUsername}`);
+    console.log(`[github/oauth] GitHub user authenticated: ${githubUsername} → Supabase userId: ${userId}`);
     
-    // 3. Queue their repos for Background Ingestion seamlessly!
-    // (We reuse the existing logic by triggering the same fetch)
-    const reposRes = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=5`);
+    // 3. Fire-and-forget repo ingestion tagged with the real Supabase userId
+    const reposRes = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=5`, {
+      headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/vnd.github.v3+json" }
+    });
     if (reposRes.ok) {
-        const repos = await reposRes.json();
-        const userId = "default-user"; // Tie to identical dummy user map used by Hackathon frontend
-        
-        if (Array.isArray(repos) && repos.length > 0) {
-           Promise.allSettled(repos.map(async (repo: any) => {
-             try {
-               console.log(`[github/oauth] Queuing extraction for ${repo.html_url}`);
-               await ingestGithubRepo({
-                 userId,
-                 repoUrl: repo.html_url,
-                 branch: repo.default_branch,
-                 maxFiles: 20,
-                 oauthToken: accessToken
-               });
-             } catch (e) {
-               console.error(`[github/oauth] Error extracting ${repo.html_url}:`, e);
-             }
-           }));
-        }
+      const repos = await reposRes.json();
+      if (Array.isArray(repos) && repos.length > 0) {
+        Promise.allSettled(repos.map(async (repo: any) => {
+          try {
+            console.log(`[github/oauth] Queuing extraction for ${repo.html_url} (userId: ${userId})`);
+            await ingestGithubRepo({
+              userId,          // ← real Supabase UUID, not "default-user"
+              repoUrl: repo.html_url,
+              branch: repo.default_branch,
+              maxFiles: 20,
+              oauthToken: accessToken
+            });
+          } catch (e) {
+            console.error(`[github/oauth] Error extracting ${repo.html_url}:`, e);
+          }
+        }));
+      }
     }
 
-    // Redirect the user back to the chat interface natively
-    res.redirect("http://localhost:3000/dashboard/chat?github_connected=true");
+    // Redirect back to chat — include the userId so frontend can switch memory group
+    res.redirect(`http://localhost:3000/dashboard/chat?github_connected=true&memory_user=${encodeURIComponent(userId)}`);
 
   } catch (err: any) {
     console.error("[github/oauth] Token exchange failed:", err.message);

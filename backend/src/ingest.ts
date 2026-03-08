@@ -481,58 +481,11 @@ async function ingestTextSource(params: {
   if (sourceErr) throw sourceErr;
   console.log(`[ingest] Source document stored: ${sourceRow.id}`);
 
-  console.log("[ingest] Extracting memories with Gemini...");
-  const extracted = await extractMemories(
-    params.title,
-    params.mimeType,
-    params.sourceUrl,
-    params.text,
-    knownUsers
-  );
-  console.log(`[ingest] Extracted ${extracted.memories.length} memories`);
-
-  console.log("[ingest] Generating memory embeddings...");
-  const memoryEmbeddings = await embedTexts(
-    extracted.memories.map((m: any) => m.content)
-  );
-
-  const memoryRows: any[] = [];
-  for (let i = 0; i < extracted.memories.length; i++) {
-    const m = extracted.memories[i];
-    let targetUsers: string[] = (m.relevant_users || []).filter(
-      (u: string) => knownUsers.includes(u)
-    );
-    if (targetUsers.length === 0) {
-      targetUsers = [params.userId];
-    }
-    for (const uid of targetUsers) {
-      memoryRows.push({
-        user_id: uid,
-        document_id: sourceRow.id,
-        memory_type: m.memory_type,
-        content: m.content,
-        weight: m.weight,
-        confidence: m.confidence,
-        salience: m.salience,
-        recency_score: m.recency_score,
-        source_span: m.source_span,
-        metadata: m.metadata,
-        embedding: memoryEmbeddings[i],
-      });
-    }
-  }
-
-  await supabase.from("memory_items").delete().eq("document_id", sourceRow.id);
-  const { error: memErr } = await supabase.from("memory_items").insert(memoryRows);
-  if (memErr) throw memErr;
-
-  const userBreakdown = knownUsers
-    .map((u) => `${u}: ${memoryRows.filter((r) => r.user_id === u).length}`)
-    .join(", ");
-  console.log(`[ingest] Inserted ${memoryRows.length} memories (${userBreakdown})`);
-
-  console.log("[ingest] Chunking and embedding document...");
+  // ── Step 1: Chunk first ──────────────────────────────────────────────
+  console.log("[ingest] Chunking document...");
   const chunks = chunkText(params.text);
+  console.log(`[ingest] ${chunks.length} chunks produced`);
+
   const chunkEmbeddings = await embedTexts(chunks);
   const chunkRows = chunks.map((content, idx) => ({
     document_id: sourceRow.id,
@@ -549,10 +502,81 @@ async function ingestTextSource(params: {
   if (chunkErr) throw chunkErr;
   console.log(`[ingest] Inserted ${chunkRows.length} chunks`);
 
+  // ── Step 2: Extract memories from each chunk ─────────────────────────
+  // Gemini works on focused 1200-char slices → tighter, more accurate memories.
+  console.log("[ingest] Extracting memories from chunks via Gemini...");
+  const allExtractedMemories: any[] = [];
+
+  for (let idx = 0; idx < chunks.length; idx++) {
+    try {
+      const extracted = await extractMemories(
+        `${params.title} [chunk ${idx + 1}/${chunks.length}]`,
+        params.mimeType,
+        params.sourceUrl,
+        chunks[idx],
+        knownUsers
+      );
+      allExtractedMemories.push(...extracted.memories);
+    } catch (err: any) {
+      console.warn(`[ingest] Gemini extraction failed for chunk ${idx}:`, err.message);
+    }
+  }
+  console.log(`[ingest] Extracted ${allExtractedMemories.length} memories across ${chunks.length} chunks`);
+
+  // ── Step 3: Embed and persist memories ───────────────────────────────
+  const memoryRows: any[] = [];
+  if (allExtractedMemories.length > 0) {
+    const memoryEmbeddings = await embedTexts(allExtractedMemories.map((m: any) => m.content));
+
+    // Map Gemini memory types to what the DB constraint accepts — no SQL changes needed.
+    // 'skill' isn't in the DB constraint, so we store it as 'fact' but preserve
+    // the original type in metadata (same approach Google Drive ingestion uses implicitly).
+    const DB_TYPE_MAP: Record<string, string> = {
+      fact: "fact", task: "task", project: "project",
+      preference: "preference", person: "person", summary: "summary",
+      skill: "fact", // skill → stored as fact, raw label kept in metadata
+    };
+
+    for (let i = 0; i < allExtractedMemories.length; i++) {
+      const m = allExtractedMemories[i];
+      let targetUsers: string[] = (m.relevant_users || []).filter(
+        (u: string) => knownUsers.includes(u)
+      );
+      if (targetUsers.length === 0) targetUsers = [params.userId];
+
+      const dbMemoryType = DB_TYPE_MAP[m.memory_type] ?? "fact";
+
+      for (const uid of targetUsers) {
+        memoryRows.push({
+          user_id: uid,
+          document_id: sourceRow.id,
+          memory_type: dbMemoryType,
+          content: m.content,
+          weight: m.weight,
+          confidence: m.confidence,
+          salience: m.salience,
+          recency_score: m.recency_score,
+          source_span: m.source_span,
+          // Merge original memory_type label into metadata for display/filtering
+          metadata: { ...m.metadata, original_memory_type: m.memory_type },
+          embedding: memoryEmbeddings[i],
+        });
+      }
+    }
+
+    await supabase.from("memory_items").delete().eq("document_id", sourceRow.id);
+    const { error: memErr } = await supabase.from("memory_items").insert(memoryRows);
+    if (memErr) throw memErr;
+
+    const userBreakdown = knownUsers
+      .map((u) => `${u}: ${memoryRows.filter((r: any) => r.user_id === u).length}`)
+      .join(", ");
+    console.log(`[ingest] Inserted ${memoryRows.length} memories (${userBreakdown})`);
+  }
+
   return {
     documentId: sourceRow.id,
     title: params.title,
-    summary: extracted.document_summary,
     memoriesInserted: memoryRows.length,
     chunksInserted: chunkRows.length,
   };
